@@ -1,0 +1,3 @@
+# Copiar a local.properties (Android Studio añade sdk.dir solo).
+SUPABASE_URL=https://TU-PROYECTO.supabase.co
+SUPABASE_ANON_KEY=tu-anon-o-publishable-key
