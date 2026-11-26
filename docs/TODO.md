@@ -4,21 +4,21 @@ Estado: ✅ hecho · 🟡 escrito sin probar · ⬜ pendiente
 
 ## M0 — Base
 - ✅ Plan, decisiones y guía de instalación
-- 🟡 Migración SQL completa (`supabase/migrations/…_init.sql`)
-- 🟡 Edge Functions `notify` (FCM v1) y `purge`
+- ✅ Migración SQL completa (`supabase/migrations/…_init.sql`): aplicada en el proyecto real
+- ✅ Edge Functions `notify` (FCM v1) y `purge`: desplegadas; `purge` probada desde la BD (pg_net → 200)
 - 🟡 Esqueleto escritorio (Tauri 2 + React)
-- 🟡 Esqueleto Android (Compose + Glance + FCM + WorkManager)
+- 🟡 Esqueleto Android (Compose + Glance + FCM + WorkManager): compila, falta probarlo en el móvil
 - 🟡 CI de releases (`.github/workflows/release.yml`)
-- ⬜ Cuentas Supabase y Firebase → [TAREAS.md](TAREAS.md)
-- ⬜ `npx supabase db push` sin errores
+- ✅ Cuentas Supabase y Firebase → [TAREAS.md](TAREAS.md)
+- ✅ `npx supabase db push --remote` sin errores (CLI 3.x: hace falta `--remote`)
 - ⬜ `npm run tauri dev` compila
-- ⬜ Android: generar el Gradle wrapper, compilar y subir el wrapper a git
+- ✅ Android: Gradle wrapper 8.10.2 subido; `./gradlew assembleDebug` compila con JDK 17
 - ⬜ Icono Android adaptativo (Image Asset Studio con `assets/logo.svg`)
 
 **Posibles fallos en el primer build** (código escrito sin compilar):
 - supabase-kt: si no existe `auth.awaitInitialization()` o `SessionStatus.Initializing`, revisa los nombres en la versión instalada.
   En la 2.x eran `SessionStatus.LoadingFromStorage` y no hay `awaitInitialization`.
-- Glance: imports de `defaultWeight`/`cornerRadius` según la versión.
+- Glance: imports de `defaultWeight`/`cornerRadius` según la versión. (Hecho: `actionStartActivity<T>()` va en `androidx.glance.action`.)
 - Tauri: si se queja del feature `protocol-asset` o de las capabilities, el mensaje de error dice exactamente qué añadir.
 
 ## M1 — Cuentas y contactos
