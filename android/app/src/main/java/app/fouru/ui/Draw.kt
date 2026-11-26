@@ -1,6 +1,7 @@
 package app.fouru.ui
 
 import android.os.SystemClock
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -14,6 +15,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -41,8 +44,6 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import app.fouru.data.Drawing
 import app.fouru.data.DrawingRenderer
 import app.fouru.data.Stroke
@@ -67,9 +68,15 @@ fun DrawScreen(onDone: (Drawing) -> Unit, onCancel: () -> Unit) {
     // Reloj del dibujo: las pausas entre trazos se recortan a MAX_GAP_MS.
     var lastEnd by remember { mutableLongStateOf(0L) }
 
-    Dialog(onDismissRequest = onCancel, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    // Capa a pantalla completa dentro de la propia ventana (no un Dialog): así
+    // llegan los márgenes del sistema y nada queda debajo de la barra de gestos.
+    BackHandler(onBack = onCancel)
+    run {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(
+                Modifier.fillMaxSize().systemBarsPadding().padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     TextButton(onClick = onCancel) { Text("Cancelar") }
                     Spacer(Modifier.weight(1f))
@@ -128,7 +135,7 @@ fun DrawScreen(onDone: (Drawing) -> Unit, onCancel: () -> Unit) {
                 }
                 Button(
                     enabled = strokes.isNotEmpty(),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                     onClick = { onDone(Drawing(bg = bg, strokes = strokes.toList())) },
                 ) { Text("Usar dibujo") }
             }
