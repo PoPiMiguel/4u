@@ -17,6 +17,7 @@ const PATHS: Record<string, string> = {
   widget: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z",
   logout: "M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10",
   pin: "M9 4h6l-1 6 3 3H7l3-3-1-6zM12 13v7",
+  refresh: "M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6",
 };
 
 export type IconName = keyof typeof PATHS;

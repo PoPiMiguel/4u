@@ -38,6 +38,7 @@ export default function Home({ userId }: { userId: string }) {
   const [history, setHistory] = useState<HistoryItem[]>(loadHistory);
   const [status, setStatus] = useState<{ text: string; error: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [outPending, setOutPending] = useState<OutPending[]>([]);
   const [sent, setSent] = useState<SentItem[]>([]);
   const [localThumbs, setLocalThumbs] = useState(sentThumbs);
@@ -81,7 +82,9 @@ export default function Home({ userId }: { userId: string }) {
     syncInbox(userId).then(refreshHistory).catch(console.error);
     refreshOutgoing();
     // Programados que salen, entregas, vistos y contactos que cambian desde el otro lado.
+    // Realtime avisa al momento, pero por si se pierde algo: cada 15 s.
     const timer = setInterval(() => {
+      syncInbox(userId).then(refreshHistory).catch(console.error);
       refreshOutgoing();
       refreshContacts().catch(console.error);
     }, 15_000);
@@ -166,6 +169,23 @@ export default function Home({ userId }: { userId: string }) {
       <header className="topbar">
         <span className="wordmark">4u</span>
         <h1>{TABS[tab].label}</h1>
+        <button
+          className={`icon-button refresh${refreshing ? " spinning" : ""}`}
+          title="Refrescar"
+          disabled={refreshing}
+          onClick={async () => {
+            setRefreshing(true);
+            try {
+              await Promise.all([syncInbox(userId).then(refreshHistory), refreshOutgoing(), refreshContacts()]);
+            } catch (e) {
+              setStatus({ text: errorMessage(e), error: true });
+            } finally {
+              setRefreshing(false);
+            }
+          }}
+        >
+          <Icon name="refresh" size={20} />
+        </button>
       </header>
 
       <div className="pager" ref={pager} onScroll={onScroll}>

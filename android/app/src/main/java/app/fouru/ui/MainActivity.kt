@@ -81,6 +81,8 @@ import app.fouru.data.SentItem
 import app.fouru.data.Supa
 import app.fouru.data.VideoPrep
 import app.fouru.push.InboxWorker
+import app.fouru.data.InboxSync
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import app.fouru.widget.FourUWidget
 import androidx.core.content.FileProvider
 import androidx.glance.appwidget.updateAll
@@ -172,6 +174,7 @@ private fun LoginScreen() {
 
 // ---------------------------------------------------------------- Home
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun HomeScreen() {
     val ctx = LocalContext.current
@@ -250,11 +253,21 @@ private fun HomeScreen() {
         if (Build.VERSION.SDK_INT >= 33) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         runCatching { Repo.registerDevice(ctx) }
     }
-    // Programados que salen, entregas, vistos y contactos que cambian desde el otro lado.
+    // Con la app abierta, sincroniza ella misma (no depende de que Android deje
+    // correr el worker): mensajes nuevos, programados que salen, entregas,
+    // vistos y contactos que cambian desde el otro lado.
+    suspend fun syncAll() {
+        runCatching { InboxSync.run(ctx) }.onSuccess { added ->
+            if (added > 0) runCatching { FourUWidget().updateAll(ctx) }
+        }
+        history = withContext(Dispatchers.IO) { LocalStore.history(ctx) }
+        refreshContacts()
+        refreshOutgoing()
+    }
+    var refreshing by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         while (true) {
-            refreshContacts()
-            refreshOutgoing()
+            syncAll()
             delay(15_000)
         }
     }
@@ -315,7 +328,19 @@ private fun HomeScreen() {
             }
         },
     ) { inner ->
-        HorizontalPager(state = pager, modifier = Modifier.fillMaxSize().padding(inner), beyondViewportPageCount = 1) { page ->
+      // Deslizar hacia abajo para refrescar, en cualquier pestaña.
+      PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = {
+            scope.launch {
+                refreshing = true
+                syncAll()
+                refreshing = false
+            }
+        },
+        modifier = Modifier.fillMaxSize().padding(inner),
+      ) {
+        HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
             when (page) {
                 0 -> InboxTab(
                     history = history,
@@ -385,6 +410,7 @@ private fun HomeScreen() {
                 else -> AccountTab(busy, ::launchSafe)
             }
         }
+      }
     }
 
     // Al volver a Recibidos, lo que haya sin ver cuenta como visto.
