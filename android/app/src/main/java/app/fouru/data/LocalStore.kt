@@ -43,6 +43,18 @@ object LocalStore {
         }
     }
 
+    // ---------- Miniaturas de lo que envío ----------
+    // `purge` borra las del servidor en cuanto todos lo descargan: me quedo una copia pequeña.
+
+    private fun sentDir(ctx: Context) = File(ctx.filesDir, "sent").apply { mkdirs() }
+
+    fun saveSentThumb(ctx: Context, id: String, jpeg: ByteArray) {
+        File(sentDir(ctx), "$id.jpg").writeBytes(jpeg)
+        sentDir(ctx).listFiles()?.sortedByDescending { it.lastModified() }?.drop(100)?.forEach { it.delete() }
+    }
+
+    fun sentThumb(ctx: Context, id: String): File? = File(sentDir(ctx), "$id.jpg").takeIf { it.exists() }
+
     /** Id estable de esta instalación (para la tabla devices). */
     fun deviceId(ctx: Context): String {
         val prefs = ctx.getSharedPreferences("4u", Context.MODE_PRIVATE)

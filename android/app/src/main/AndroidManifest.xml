@@ -25,6 +25,17 @@
             </intent-filter>
         </activity>
 
+        <!-- Vídeo, animación HTML y dibujo a pantalla completa. -->
+        <activity
+            android:name=".ui.ViewerActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen" />
+
+        <!-- Descarga el escáner de QR de Google Play al instalar (no al primer uso). -->
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="barcode_ui" />
+
         <service
             android:name=".push.PushService"
             android:exported="false">

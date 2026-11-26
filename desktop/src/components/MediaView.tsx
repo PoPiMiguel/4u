@@ -1,6 +1,7 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 import type { HistoryItem } from "../lib/types";
 import HtmlPlayer from "./HtmlPlayer";
+import DrawingPlayer from "./DrawingPlayer";
 
 /** Muestra un elemento recibido según su tipo. `compact` evita iframes en miniaturas. */
 export default function MediaView({ item, compact = false }: { item: HistoryItem; compact?: boolean }) {
@@ -17,8 +18,7 @@ export default function MediaView({ item, compact = false }: { item: HistoryItem
     case "html":
       return compact ? <div className="media emoji">🌸</div> : <HtmlPlayer src={src} />;
     case "drawing":
-      // TODO(M5): reproducir trazos.
-      return <div className="media emoji">🎨</div>;
+      return <DrawingPlayer src={src} still={compact} />;
     default:
       return null;
   }

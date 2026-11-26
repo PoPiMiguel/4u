@@ -4,9 +4,12 @@ export type WidgetSize = "small" | "medium" | "large";
 
 export interface Contact {
   contactId: string;
+  /** Apodo si lo hay; si no, su nombre. */
   name: string;
+  displayName: string;
   nickname: string | null;
   status: "accepted" | "blocked";
+  avatarUrl: string | null;
 }
 
 /** Elemento recibido, guardado en local. Lo leen la ventana principal y el widget. */

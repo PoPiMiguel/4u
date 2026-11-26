@@ -65,6 +65,17 @@ fn toggle_widget(app: AppHandle) -> Result<bool, String> {
     Ok(!visible)
 }
 
+/// El actualizador integrado solo sirve en Windows, macOS y la AppImage de Linux.
+/// Instalado con pacman (PKGBUILD 4u-bin) o .deb, actualiza el gestor de paquetes.
+#[tauri::command]
+fn updater_supported() -> bool {
+    if cfg!(target_os = "linux") {
+        std::env::var_os("APPIMAGE").is_some()
+    } else {
+        true
+    }
+}
+
 #[tauri::command]
 fn show_main(app: AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
@@ -74,6 +85,8 @@ fn show_main(app: AppHandle) {
     }
 }
 
+const HIDDEN_ARG: &str = "--hidden";
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -82,7 +95,25 @@ pub fn run() {
             show_main(app.clone());
         }))
         .plugin(tauri_plugin_notification::init())
+        // Al iniciar sesión arranca con --hidden: solo bandeja y widget.
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec![HIDDEN_ARG]),
+        ))
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
+        // Recuerda dónde dejaste el widget (el tamaño lo pone S/M/L).
+        .plugin(
+            tauri_plugin_window_state::Builder::new()
+                .with_state_flags(tauri_plugin_window_state::StateFlags::POSITION)
+                .with_denylist(&["main"])
+                .build(),
+        )
         .setup(|app| {
+            if !std::env::args().any(|a| a == HIDDEN_ARG) {
+                show_main(app.handle().clone());
+            }
+
             let open = MenuItem::with_id(app, "open", "Abrir 4u", true, None::<&str>)?;
             let widget = MenuItem::with_id(app, "widget", "Mostrar/ocultar widget", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Salir", true, None::<&str>)?;
@@ -114,6 +145,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             download_media,
+            updater_supported,
             set_widget_size,
             toggle_widget,
             show_main

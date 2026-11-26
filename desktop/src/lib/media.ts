@@ -92,3 +92,27 @@ async function videoThumbnail(file: Blob): Promise<Blob> {
     URL.revokeObjectURL(url);
   }
 }
+
+/** Avatar: recorte cuadrado centrado, 256 px, JPEG. */
+export async function avatarJpeg(source: Blob): Promise<Blob> {
+  const bmp = await createImageBitmap(source);
+  const side = Math.min(bmp.width, bmp.height);
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 256;
+  canvas
+    .getContext("2d")!
+    .drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, 256, 256);
+  bmp.close();
+  return canvasToJpeg(canvas);
+}
+
+/** Miniatura pequeña como data URL (para recordar en local lo que envié). */
+export async function tinyDataUrl(source: Blob, maxSide = 160): Promise<string> {
+  const small = await resizeImage(source, maxSide);
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(small);
+  });
+}

@@ -18,7 +18,8 @@
         "width": 440,
         "height": 760,
         "minWidth": 360,
-        "minHeight": 520
+        "minHeight": 520,
+        "visible": false
       },
       {
         "label": "widget",
@@ -38,7 +39,11 @@
       "csp": null,
       "assetProtocol": {
         "enable": true,
-        "scope": ["$PICTURE/4u/**", "$VIDEO/4u/**", "$APPDATA/media/**"]
+        "scope": [
+          "$PICTURE/4u/**",
+          "$VIDEO/4u/**",
+          "$APPDATA/media/**"
+        ]
       }
     }
   },
@@ -52,6 +57,18 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDdGMTk3Njg1REE1QTE4RUMKUldUc0dGcmFoWFlaZjNBT29sZVFobXZJS1NHNEIxY3hUa3pzOU13V1dwbFBVZ2ZmSzduN1o0cUoK",
+      "endpoints": [
+        "https://github.com/PoPiMiguel/4u/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

@@ -62,10 +62,65 @@ object Repo {
 
     suspend fun contacts(): List<ContactRow> =
         supabase.from("contacts")
-            .select(Columns.raw("contact_id, status, nickname, contact:profiles!contacts_contact_id_fkey(display_name)")) {
+            .select(Columns.raw("contact_id, status, nickname, contact:profiles!contacts_contact_id_fkey(display_name, avatar_path)")) {
                 filter { eq("user_id", uid()) }
             }
             .decodeList<ContactRow>()
+            .sortedBy { it.name.lowercase() }
+
+    /** Apodo solo para mí; null = volver a su nombre. */
+    suspend fun renameContact(contactId: String, nickname: String?) {
+        supabase.from("contacts").update({ set("nickname", nickname) }) {
+            filter {
+                eq("user_id", uid())
+                eq("contact_id", contactId)
+            }
+        }
+    }
+
+    /** Bloquear corta el envío en los dos sentidos (DECISIONS §3). */
+    suspend fun setBlocked(contactId: String, blocked: Boolean) {
+        supabase.from("contacts").update({ set("status", if (blocked) "blocked" else "accepted") }) {
+            filter {
+                eq("user_id", uid())
+                eq("contact_id", contactId)
+            }
+        }
+    }
+
+    /** Elimina el contacto en los dos sentidos. */
+    suspend fun removeContact(contactId: String) {
+        supabase.postgrest.rpc("remove_contact", buildJsonObject { put("p_contact", contactId) })
+    }
+
+    // ---------- Perfil ----------
+    suspend fun profile(): ProfileName =
+        supabase.from("profiles").select(Columns.raw("display_name, avatar_path")) {
+            filter { eq("id", uid()) }
+        }.decodeSingle<ProfileName>()
+
+    suspend fun setDisplayName(name: String) {
+        supabase.from("profiles").update({ set("display_name", name) }) { filter { eq("id", uid()) } }
+    }
+
+    /** Sube un avatar nuevo (JPEG cuadrado) y borra el anterior. */
+    suspend fun setAvatar(jpeg: ByteArray, previous: String?) {
+        val path = "${uid()}/${UUID.randomUUID()}.jpg"
+        val bucket = supabase.storage.from("avatars")
+        bucket.upload(path, jpeg)
+        supabase.from("profiles").update({ set("avatar_path", path) }) { filter { eq("id", uid()) } }
+        if (previous != null) runCatching { bucket.delete(previous) }
+    }
+
+    private val avatarCache = mutableMapOf<String, ByteArray>()
+
+    /** Bytes de un avatar (cambia de nombre al cambiar, así que se puede cachear). */
+    suspend fun avatar(path: String): ByteArray =
+        avatarCache[path] ?: supabase.storage.from("avatars").downloadAuthenticated(path).also { avatarCache[path] = it }
+
+    // ---------- Enviados ----------
+    suspend fun sent(limit: Int = 30): List<SentItem> =
+        supabase.postgrest.rpc("my_sent", buildJsonObject { put("p_limit", limit) }).decodeList<SentItem>()
 
     // ---------- Envío ----------
     suspend fun send(
@@ -77,7 +132,7 @@ object Repo {
         thumb: ByteArray? = null,
         caption: String? = null,
         deliverAt: Instant? = null,
-    ) {
+    ): String {
         val me = uid()
         val id = UUID.randomUUID().toString()
         val bucket = supabase.storage.from("media")
@@ -96,6 +151,7 @@ object Repo {
             put("p_caption", caption)
             put("p_deliver_at", deliverAt?.toString())
         })
+        return id
     }
 
     // ---------- Envíos en espera ----------

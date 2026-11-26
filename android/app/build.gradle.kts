@@ -77,4 +77,15 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
 
     implementation(libs.coil.compose)
+
+    // Vídeo: comprimir a 720p antes de enviar y reproducir a pantalla completa.
+    implementation(libs.media3.transformer)
+    implementation(libs.media3.effect)
+    implementation(libs.media3.common)
+    implementation(libs.media3.exoplayer)
+    implementation(libs.media3.ui)
+
+    // QR del código de invitación: escanear (Google, sin permiso de cámara) y mostrar.
+    implementation(libs.play.services.code.scanner)
+    implementation(libs.zxing.core)
 }

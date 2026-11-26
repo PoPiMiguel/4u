@@ -6,6 +6,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class ProfileName(
     @SerialName("display_name") val displayName: String,
+    @SerialName("avatar_path") val avatarPath: String? = null,
 )
 
 @Serializable
@@ -16,6 +17,8 @@ data class ContactRow(
     val contact: ProfileName? = null,
 ) {
     val name: String get() = nickname ?: contact?.displayName ?: "?"
+    val displayName: String get() = contact?.displayName ?: "?"
+    val avatarPath: String? get() = contact?.avatarPath
     val blocked: Boolean get() = status == "blocked"
 }
 
@@ -76,3 +79,23 @@ data class OutPending(
 ) {
     val scheduled: Boolean get() = status == "scheduled"
 }
+
+@Serializable
+data class SentRecipient(
+    val id: String,
+    val name: String,
+    val delivered: Boolean,
+    val seen: Boolean,
+    val reaction: String? = null,
+)
+
+/** Envío propio ya salido (RPC my_sent). */
+@Serializable
+data class SentItem(
+    val id: String,
+    val type: String,
+    val caption: String? = null,
+    @SerialName("thumb_path") val thumbPath: String? = null,
+    @SerialName("sent_at") val sentAt: String? = null,
+    val recipients: List<SentRecipient> = emptyList(),
+)

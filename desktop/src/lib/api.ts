@@ -18,21 +18,90 @@ export async function listContacts(userId: string): Promise<Contact[]> {
   const rows = check(
     await supabase
       .from("contacts")
-      .select("contact_id, status, nickname, contact:profiles!contacts_contact_id_fkey(display_name)")
+      .select("contact_id, status, nickname, contact:profiles!contacts_contact_id_fkey(display_name, avatar_path)")
       .eq("user_id", userId),
   ) as unknown as {
     contact_id: string;
     status: "accepted" | "blocked";
     nickname: string | null;
-    contact: { display_name: string } | null;
+    contact: { display_name: string; avatar_path: string | null } | null;
   }[];
 
-  return rows.map((r) => ({
-    contactId: r.contact_id,
-    status: r.status,
-    nickname: r.nickname,
-    name: r.nickname ?? r.contact?.display_name ?? "?",
-  }));
+  const urls = await signAvatars(rows.map((r) => r.contact?.avatar_path ?? null));
+  return rows
+    .map((r) => ({
+      contactId: r.contact_id,
+      status: r.status,
+      nickname: r.nickname,
+      displayName: r.contact?.display_name ?? "?",
+      name: r.nickname ?? r.contact?.display_name ?? "?",
+      avatarUrl: r.contact?.avatar_path ? urls.get(r.contact.avatar_path) ?? null : null,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Renombra un contacto solo para mí (vacío = volver a su nombre). */
+export async function renameContact(userId: string, contactId: string, nickname: string | null) {
+  check(
+    await supabase.from("contacts").update({ nickname }).eq("user_id", userId).eq("contact_id", contactId),
+  );
+}
+
+/** Bloquear corta el envío en los dos sentidos (ver DECISIONS §3). */
+export async function setBlocked(userId: string, contactId: string, blocked: boolean) {
+  check(
+    await supabase
+      .from("contacts")
+      .update({ status: blocked ? "blocked" : "accepted" })
+      .eq("user_id", userId)
+      .eq("contact_id", contactId),
+  );
+}
+
+/** Elimina el contacto en los dos sentidos. */
+export async function removeContact(contactId: string) {
+  check(await supabase.rpc("remove_contact", { p_contact: contactId }));
+}
+
+// ---------- Perfil y avatar ----------
+
+export interface Profile {
+  displayName: string;
+  avatarPath: string | null;
+  avatarUrl: string | null;
+}
+
+async function signAvatars(paths: (string | null)[]): Promise<Map<string, string>> {
+  const list = [...new Set(paths.filter((p): p is string => !!p))];
+  const urls = new Map<string, string>();
+  if (list.length === 0) return urls;
+  const { data } = await supabase.storage.from("avatars").createSignedUrls(list, 3600);
+  for (const d of data ?? []) if (d.path && d.signedUrl) urls.set(d.path, d.signedUrl);
+  return urls;
+}
+
+export async function getProfile(userId: string): Promise<Profile> {
+  const row = check(
+    await supabase.from("profiles").select("display_name, avatar_path").eq("id", userId).single(),
+  ) as { display_name: string; avatar_path: string | null };
+  const urls = await signAvatars([row.avatar_path]);
+  return {
+    displayName: row.display_name,
+    avatarPath: row.avatar_path,
+    avatarUrl: row.avatar_path ? urls.get(row.avatar_path) ?? null : null,
+  };
+}
+
+export async function setDisplayName(userId: string, name: string) {
+  check(await supabase.from("profiles").update({ display_name: name }).eq("id", userId));
+}
+
+/** Sube un avatar nuevo (JPEG ya recortado) y borra el anterior. */
+export async function setAvatar(userId: string, jpeg: Blob, previous: string | null) {
+  const path = `${userId}/${crypto.randomUUID()}.jpg`;
+  check(await supabase.storage.from("avatars").upload(path, jpeg, { contentType: "image/jpeg" }));
+  check(await supabase.from("profiles").update({ avatar_path: path }).eq("id", userId));
+  if (previous) await supabase.storage.from("avatars").remove([previous]);
 }
 
 export interface SendOptions {
@@ -195,4 +264,50 @@ export async function cancelOutPending(item: OutPending): Promise<void> {
     const { error } = await supabase.storage.from("media").remove(paths);
     if (error) console.error("No se pudieron borrar los archivos", error);
   }
+}
+
+// ---------- Enviados ----------
+
+export interface SentRecipient {
+  id: string;
+  name: string;
+  delivered: boolean;
+  seen: boolean;
+  reaction: string | null;
+}
+
+export interface SentItem {
+  id: string;
+  type: MessageType;
+  caption: string | null;
+  thumbPath: string | null;
+  sentAt: string;
+  recipients: SentRecipient[];
+  thumbUrl: string | null;
+}
+
+export async function listSent(limit = 30): Promise<SentItem[]> {
+  const rows = check(await supabase.rpc("my_sent", { p_limit: limit })) as {
+    id: string;
+    type: MessageType;
+    caption: string | null;
+    thumb_path: string | null;
+    sent_at: string;
+    recipients: SentRecipient[];
+  }[];
+  const thumbs = rows.map((r) => r.thumb_path).filter((p): p is string => !!p);
+  const urls = new Map<string, string>();
+  if (thumbs.length > 0) {
+    const { data } = await supabase.storage.from("media").createSignedUrls(thumbs, 3600);
+    for (const d of data ?? []) if (d.path && d.signedUrl) urls.set(d.path, d.signedUrl);
+  }
+  return rows.map((r) => ({
+    id: r.id,
+    type: r.type,
+    caption: r.caption,
+    thumbPath: r.thumb_path,
+    sentAt: r.sent_at,
+    recipients: r.recipients,
+    thumbUrl: r.thumb_path ? urls.get(r.thumb_path) ?? null : null,
+  }));
 }
