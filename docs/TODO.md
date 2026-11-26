@@ -6,12 +6,12 @@ Estado: ✅ hecho · 🟡 escrito sin probar · ⬜ pendiente
 - ✅ Plan, decisiones y guía de instalación
 - ✅ Migración SQL completa (`supabase/migrations/…_init.sql`): aplicada en el proyecto real
 - ✅ Edge Functions `notify` (FCM v1) y `purge`: desplegadas; `purge` probada desde la BD (pg_net → 200)
-- 🟡 Esqueleto escritorio (Tauri 2 + React)
-- 🟡 Esqueleto Android (Compose + Glance + FCM + WorkManager): compila, falta probarlo en el móvil
+- ✅ Esqueleto escritorio (Tauri 2 + React)
+- ✅ Esqueleto Android (Compose + Glance + FCM + WorkManager): probado en un Galaxy A54 (Android 16)
 - 🟡 CI de releases (`.github/workflows/release.yml`)
 - ✅ Cuentas Supabase y Firebase → [TAREAS.md](TAREAS.md)
 - ✅ `npx supabase db push --remote` sin errores (CLI 3.x: hace falta `--remote`)
-- ⬜ `npm run tauri dev` compila
+- ✅ `npm run tauri dev` compila y funciona (Hyprland)
 - ✅ Android: Gradle wrapper 8.10.2 subido; `./gradlew assembleDebug` compila con JDK 17
 - ⬜ Icono Android adaptativo (Image Asset Studio con `assets/logo.svg`)
 
@@ -22,17 +22,18 @@ Estado: ✅ hecho · 🟡 escrito sin probar · ⬜ pendiente
 - Tauri: si se queja del feature `protocol-asset` o de las capabilities, el mensaje de error dice exactamente qué añadir.
 
 ## M1 — Cuentas y contactos
-- 🟡 Registro / login (escritorio y Android)
-- 🟡 Código de invitación y aceptar
+- ✅ Registro / login (escritorio y Android)
+- ✅ Código de invitación y aceptar
 - ⬜ QR del código (escritorio: mostrar; Android: escanear con CameraX/ML Kit o pegar)
 - ⬜ Renombrar contacto (`nickname`), bloquear / desbloquear, eliminar
 - ⬜ Avatar (bucket `avatars` + política)
 
 ## M2 — Primer envío
-- 🟡 Foto escritorio → Android (push + widget)
-- 🟡 Foto Android → escritorio (Realtime + notificación + widget)
-- 🟡 Widget Android con 3 tamaños
+- ✅ Foto escritorio → Android (push + widget)
+- ✅ Foto Android → escritorio (Realtime + notificación + widget)
+- 🟡 Widget Android con 3 tamaños (probado el que sale por defecto)
 - 🟡 Widget escritorio con 3 tamaños
+- 🟡 Texto del envío pequeño en una esquina de la imagen (widgets de escritorio y Android)
 - 🟡 Historial básico
 - ⬜ Configurar el widget de Android por contacto (actividad de configuración + `GlanceAppWidgetManager`)
 - ⬜ Arranque automático del escritorio (`tauri-plugin-autostart`)
@@ -47,8 +48,8 @@ Estado: ✅ hecho · 🟡 escrito sin probar · ⬜ pendiente
 - ⬜ Historial en SQLite / Room
 
 ## M4 — Interacción
-- 🟡 Reacciones y "visto" (escritorio y Android)
-- 🟡 Toque 💭 (vibración en Android, temblor del widget en escritorio)
+- ✅ Reacciones y "visto" (escritorio y Android)
+- ✅ Toque 💭 (vibración en Android, temblor del widget en escritorio)
 - ⬜ Mostrar al emisor el estado de lo que envió (entregado / visto / reacción) en una vista "Enviados"
 
 ## M5 — Lienzo
@@ -56,10 +57,12 @@ Estado: ✅ hecho · 🟡 escrito sin probar · ⬜ pendiente
 - ⬜ Formato de trazos ([DECISIONS.md §12](DECISIONS.md#12-dibujo-m5)) + reproducción animada
 
 ## M6 — Programados
-- 🟡 Backend (pg_cron + RLS)
-- 🟡 Escritorio: selector de fecha y hora
-- ⬜ Android: selector de fecha y hora
-- ⬜ Lista de programados con opción de cancelar (`cancel_scheduled` + borrar archivos)
+- ✅ Backend (pg_cron + RLS)
+- ✅ Escritorio: selector de fecha y hora
+- 🟡 Android: selector de fecha y hora (diálogos del sistema) y campo de texto
+- 🟡 Lista «En espera» (programados y enviados sin entregar) con cancelar, escritorio y Android:
+  RPC `my_pending` y `cancel_pending` (migración `…_pending.sql`); al borrarse entero, el cliente borra los archivos.
+  Un enviado se cancela solo para quien aún no lo ha recibido.
 
 ## M7 — Distribución
 - ⬜ Keystore de release Android + `signingConfig` + secretos en GitHub

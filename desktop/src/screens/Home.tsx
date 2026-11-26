@@ -2,7 +2,17 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { emit } from "@tauri-apps/api/event";
 import { errorMessage, supabase } from "../lib/supabase";
-import { acceptInvite, createInvite, listContacts, markSeen, react, sendMessage } from "../lib/api";
+import {
+  acceptInvite,
+  cancelOutPending,
+  createInvite,
+  listContacts,
+  listOutPending,
+  markSeen,
+  react,
+  sendMessage,
+  type OutPending,
+} from "../lib/api";
 import { prepareFile } from "../lib/media";
 import { subscribeInbox, syncInbox } from "../lib/inbox";
 import { loadHistory, updateHistoryItem } from "../lib/store";
@@ -10,6 +20,23 @@ import type { Contact, HistoryItem, WidgetSize } from "../lib/types";
 import MediaView from "../components/MediaView";
 
 const REACTIONS = ["❤️", "😂", "😮", "😢", "🔥"];
+
+const TYPE_EMOJI: Record<string, string> = {
+  ping: "💭",
+  html: "🌸",
+  drawing: "🎨",
+  video: "🎬",
+  gif: "✨",
+  photo: "📷",
+};
+
+function pendingLabel(p: OutPending): string {
+  if (p.status === "scheduled") {
+    return `📅 ${new Date(p.deliverAt).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}`;
+  }
+  const waiting = p.recipients.filter((r) => !r.delivered).map((r) => r.name);
+  return `⏳ Sin entregar a ${waiting.join(", ")}`;
+}
 
 export default function Home({ userId }: { userId: string }) {
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -22,9 +49,12 @@ export default function Home({ userId }: { userId: string }) {
   const [when, setWhen] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [outPending, setOutPending] = useState<OutPending[]>([]);
+  const [confirmCancel, setConfirmCancel] = useState<string | null>(null);
 
   const refreshHistory = () => setHistory(loadHistory());
   const refreshContacts = () => listContacts(userId).then(setContacts);
+  const refreshOutPending = () => listOutPending().then(setOutPending).catch(console.error);
 
   async function guard(fn: () => Promise<void>) {
     setBusy(true);
@@ -41,7 +71,14 @@ export default function Home({ userId }: { userId: string }) {
   useEffect(() => {
     refreshContacts().catch((e) => setStatus(errorMessage(e)));
     syncInbox(userId).then(refreshHistory).catch(console.error);
-    return subscribeInbox(userId, refreshHistory);
+    refreshOutPending();
+    // Los programados salen solos y los destinatarios los van recibiendo: refresco periódico.
+    const timer = setInterval(refreshOutPending, 15_000);
+    const unsubscribe = subscribeInbox(userId, refreshHistory);
+    return () => {
+      clearInterval(timer);
+      unsubscribe();
+    };
   }, [userId]);
 
   // Marcar como visto lo que aparece en pantalla.
@@ -85,12 +122,22 @@ export default function Home({ userId }: { userId: string }) {
       setCaption("");
       setWhen("");
       setStatus(when ? "📅 Programado" : "✅ Enviado");
+      await refreshOutPending();
     });
 
   const ping = (contactId: string) =>
     guard(async () => {
       await sendMessage(userId, { type: "ping", recipients: [contactId] });
       setStatus("💭 Toque enviado");
+      await refreshOutPending();
+    });
+
+  const cancel = (item: OutPending) =>
+    guard(async () => {
+      setConfirmCancel(null);
+      await cancelOutPending(item);
+      setStatus("🗑️ Envío cancelado");
+      await refreshOutPending();
     });
 
   const reactTo = (item: HistoryItem, emoji: string) =>
@@ -186,6 +233,41 @@ export default function Home({ userId }: { userId: string }) {
           {when ? "Programar" : "Enviar"} a {selected.size} contacto(s)
         </button>
       </section>
+
+      {outPending.length > 0 && (
+        <section className="card">
+          <h2>En espera</h2>
+          <ul className="pending">
+            {outPending.map((p) => (
+              <li key={p.id}>
+                <div className="pending-media">
+                  {p.thumbUrl ? <img className="media" src={p.thumbUrl} alt="" /> : <span>{TYPE_EMOJI[p.type] ?? "📦"}</span>}
+                </div>
+                <div className="pending-info">
+                  <strong>Para {p.recipients.map((r) => r.name).join(", ")}</strong>
+                  {p.caption && <p>{p.caption}</p>}
+                  <span className="muted">{pendingLabel(p)}</span>
+                </div>
+                {confirmCancel === p.id ? (
+                  <div className="row">
+                    <span className="muted">¿Cancelar?</span>
+                    <button disabled={busy} onClick={() => cancel(p)}>
+                      Sí
+                    </button>
+                    <button className="chip" onClick={() => setConfirmCancel(null)}>
+                      No
+                    </button>
+                  </div>
+                ) : (
+                  <button className="chip" disabled={busy} onClick={() => setConfirmCancel(p.id)}>
+                    Cancelar
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="card">
         <h2>Historial</h2>

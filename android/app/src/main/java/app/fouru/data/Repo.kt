@@ -98,6 +98,20 @@ object Repo {
         })
     }
 
+    // ---------- Envíos en espera ----------
+    suspend fun outPending(): List<OutPending> =
+        supabase.postgrest.rpc("my_pending").decodeList<OutPending>()
+
+    /** Cancela un envío en espera. Si se borra entero, borra también sus archivos. */
+    suspend fun cancelOutPending(item: OutPending) {
+        val deleted = supabase.postgrest.rpc("cancel_pending", buildJsonObject { put("p_id", item.id) })
+            .decodeAs<Boolean>()
+        val paths = listOfNotNull(item.storagePath, item.thumbPath)
+        if (deleted && paths.isNotEmpty()) {
+            runCatching { supabase.storage.from("media").delete(paths) }
+        }
+    }
+
     // ---------- Recepción ----------
     suspend fun pending(): List<MessageRow> =
         supabase.from("message_recipients")

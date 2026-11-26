@@ -53,3 +53,26 @@ data class HistoryItem(
     val seen: Boolean = false,
     val reaction: String? = null,
 )
+
+@Serializable
+data class OutRecipient(
+    val id: String,
+    val name: String,
+    val delivered: Boolean,
+)
+
+/** Envío propio programado o que algún destinatario aún no ha recibido (RPC my_pending). */
+@Serializable
+data class OutPending(
+    val id: String,
+    val type: String,
+    val caption: String? = null,
+    @SerialName("storage_path") val storagePath: String? = null,
+    @SerialName("thumb_path") val thumbPath: String? = null,
+    val status: String,
+    @SerialName("deliver_at") val deliverAt: String,
+    @SerialName("created_at") val createdAt: String,
+    val recipients: List<OutRecipient> = emptyList(),
+) {
+    val scheduled: Boolean get() = status == "scheduled"
+}

@@ -31,6 +31,7 @@ import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
+import androidx.glance.layout.wrapContentSize
 import androidx.glance.layout.width
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
@@ -45,8 +46,9 @@ import java.util.Date
 /**
  * Widget con 3 tamaños:
  *  - pequeño: último elemento
- *  - mediano: último + remitente, hora y texto
- *  - grande: último + texto + tira con los 3 anteriores
+ *  - mediano: último + remitente y hora
+ *  - grande: último + remitente y hora + tira con los 3 anteriores
+ * El texto del envío va pequeño en la esquina inferior izquierda de la imagen.
  * Android no puede ejecutar HTML/GIF en widgets: se muestra la miniatura.
  * TODO(M3): rotar fotogramas con AndroidRemoteViews + ViewFlipper.
  * TODO(M2+): configurar widget por contacto (actividad de configuración).
@@ -75,6 +77,7 @@ class FourUWidgetReceiver : GlanceAppWidgetReceiver() {
 private val White = ColorProvider(Color.White)
 private val Muted = ColorProvider(Color(0xFF9A9AA6))
 private val CardBg = Color(0xFF1C1C22)
+private val CaptionBg = Color(0x99000000)
 
 @Composable
 private fun WidgetContent(items: List<HistoryItem>, thumbs: List<Bitmap?>) {
@@ -95,7 +98,7 @@ private fun WidgetContent(items: List<HistoryItem>, thumbs: List<Bitmap?>) {
 
     when {
         size.height >= FourUWidget.LARGE.height -> Column(modifier = root) {
-            Box(modifier = GlanceModifier.fillMaxWidth().defaultWeight()) { Thumb(latest, thumbs[0]) }
+            Box(modifier = GlanceModifier.fillMaxWidth().defaultWeight()) { Thumb(latest, thumbs[0], showCaption = true) }
             Meta(latest, GlanceModifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp))
             Row(modifier = GlanceModifier.fillMaxWidth().height(64.dp).padding(4.dp)) {
                 items.drop(1).take(3).forEachIndexed { i, item ->
@@ -107,16 +110,38 @@ private fun WidgetContent(items: List<HistoryItem>, thumbs: List<Bitmap?>) {
         }
 
         size.width >= FourUWidget.MEDIUM.width -> Row(modifier = root) {
-            Box(modifier = GlanceModifier.width(size.height).fillMaxHeight()) { Thumb(latest, thumbs[0]) }
+            Box(modifier = GlanceModifier.width(size.height).fillMaxHeight()) { Thumb(latest, thumbs[0], showCaption = true) }
             Meta(latest, GlanceModifier.defaultWeight().fillMaxHeight().padding(10.dp))
         }
 
-        else -> Box(modifier = root) { Thumb(latest, thumbs[0]) }
+        else -> Box(modifier = root) { Thumb(latest, thumbs[0], showCaption = true) }
+    }
+}
+
+/** Miniatura; con `showCaption`, el texto del envío pequeño en la esquina inferior izquierda. */
+@Composable
+private fun Thumb(item: HistoryItem, bitmap: Bitmap?, showCaption: Boolean = false) {
+    Box(modifier = GlanceModifier.fillMaxSize(), contentAlignment = Alignment.BottomStart) {
+        ThumbImage(item, bitmap)
+        val caption = item.caption?.takeIf { showCaption && it.isNotBlank() }
+        if (caption != null) {
+            Box(modifier = GlanceModifier.wrapContentSize().padding(6.dp)) {
+                Text(
+                    caption,
+                    maxLines = 1,
+                    style = TextStyle(color = White, fontSize = 10.sp),
+                    modifier = GlanceModifier
+                        .cornerRadius(8.dp)
+                        .background(CaptionBg)
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                )
+            }
+        }
     }
 }
 
 @Composable
-private fun Thumb(item: HistoryItem, bitmap: Bitmap?) {
+private fun ThumbImage(item: HistoryItem, bitmap: Bitmap?) {
     if (bitmap != null) {
         Image(
             provider = ImageProvider(bitmap),
@@ -139,7 +164,6 @@ private fun Meta(item: HistoryItem, modifier: GlanceModifier) {
             DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(item.receivedAt)),
             style = TextStyle(color = Muted, fontSize = 12.sp),
         )
-        item.caption?.let { Text(it, style = TextStyle(color = White, fontSize = 13.sp), maxLines = 2) }
     }
 }
 

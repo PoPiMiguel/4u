@@ -1,6 +1,8 @@
 package app.fouru.ui
 
 import android.Manifest
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -23,10 +25,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -37,6 +41,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -51,6 +56,7 @@ import app.fouru.data.ContactRow
 import app.fouru.data.HistoryItem
 import app.fouru.data.LocalStore
 import app.fouru.data.MediaSaver
+import app.fouru.data.OutPending
 import app.fouru.data.Repo
 import app.fouru.data.Supa
 import app.fouru.push.InboxWorker
@@ -62,8 +68,17 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
 private val REACTIONS = listOf("❤️", "😂", "😮", "😢", "🔥")
+
+private val DATE_TIME: DateTimeFormatter =
+    DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT).withZone(ZoneId.systemDefault())
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -142,6 +157,14 @@ private fun HomeScreen() {
     var invite by remember { mutableStateOf<String?>(null) }
     var code by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
+    var caption by remember { mutableStateOf("") }
+    var deliverAt by remember { mutableStateOf<Instant?>(null) }
+    var outPending by remember { mutableStateOf<List<OutPending>>(emptyList()) }
+    var toCancel by remember { mutableStateOf<OutPending?>(null) }
+
+    suspend fun refreshOutPending() {
+        runCatching { Repo.outPending() }.onSuccess { outPending = it }
+    }
 
     fun launchSafe(okMessage: String? = null, block: suspend () -> Unit) {
         scope.launch {
@@ -155,13 +178,31 @@ private fun HomeScreen() {
 
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null) launchSafe("✅ Enviado") { sendMedia(ctx, uri, selected.toList()) }
+        if (uri != null) {
+            val at = deliverAt
+            launchSafe(if (at != null) "📅 Programado" else "✅ Enviado") {
+                if (at != null) require(at.isAfter(Instant.now())) { "Esa hora ya ha pasado" }
+                sendMedia(ctx, uri, selected.toList(), caption.trim().ifEmpty { null }, at)
+                caption = ""
+                deliverAt = null
+                refreshOutPending()
+            }
+        }
     }
 
     LaunchedEffect(Unit) {
         if (Build.VERSION.SDK_INT >= 33) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         runCatching { Repo.registerDevice(ctx) }
         runCatching { contacts = Repo.contacts() }
+    }
+    // Envíos en espera y contactos: los programados salen solos y los contactos
+    // pueden cambiar desde el otro lado.
+    LaunchedEffect(Unit) {
+        while (true) {
+            refreshOutPending()
+            runCatching { Repo.contacts() }.onSuccess { contacts = it }
+            delay(15_000)
+        }
     }
     // El worker escribe el historial en disco; refresco simple mientras la app está abierta.
     LaunchedEffect(Unit) {
@@ -211,20 +252,49 @@ private fun HomeScreen() {
                 )
                 Text(c.name + if (c.blocked) " (bloqueado)" else "", modifier = Modifier.weight(1f))
                 TextButton(enabled = !busy && !c.blocked, onClick = {
-                    launchSafe("💭 Toque enviado") { Repo.send(type = "ping", recipients = listOf(c.contactId)) }
+                    launchSafe("💭 Toque enviado") {
+                        Repo.send(type = "ping", recipients = listOf(c.contactId))
+                        refreshOutPending()
+                    }
                 }) { Text("💭") }
             }
         }
 
         // Enviar
         // TODO(M3): vídeo (Media3 Transformer para comprimir), HTML (selector de documentos).
-        // TODO(M5): lienzo de dibujo. TODO(M6): programar envío.
+        // TODO(M5): lienzo de dibujo.
         item {
-            Button(
-                enabled = !busy && selected.isNotEmpty(),
-                modifier = Modifier.fillMaxWidth(),
-                onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-            ) { Text("Enviar foto o GIF a ${selected.size} contacto(s)") }
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    caption,
+                    { caption = it.take(280) },
+                    label = { Text("Texto (opcional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(enabled = !busy, onClick = { pickDateTime(ctx, deliverAt) { deliverAt = it } }) {
+                        Text(deliverAt?.let { "📅 " + DATE_TIME.format(it) } ?: "📅 Programar")
+                    }
+                    if (deliverAt != null) {
+                        TextButton(onClick = { deliverAt = null }) { Text("Quitar") }
+                    }
+                }
+                Button(
+                    enabled = !busy && selected.isNotEmpty(),
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                ) {
+                    Text((if (deliverAt != null) "Programar" else "Enviar") + " foto o GIF a ${selected.size} contacto(s)")
+                }
+            }
+        }
+
+        // En espera
+        if (outPending.isNotEmpty()) {
+            item { Text("En espera", style = MaterialTheme.typography.titleMedium) }
+            items(outPending, key = { "out-" + it.id }) { p ->
+                PendingRow(p, enabled = !busy, onCancel = { toCancel = p })
+            }
         }
 
         // Historial
@@ -246,6 +316,78 @@ private fun HomeScreen() {
             })
         }
     }
+
+    toCancel?.let { p ->
+        AlertDialog(
+            onDismissRequest = { toCancel = null },
+            title = { Text("¿Cancelar este envío?") },
+            text = {
+                Text(
+                    if (p.scheduled) "No llegará a nadie."
+                    else "Se quitará a quien todavía no lo haya recibido.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    toCancel = null
+                    launchSafe("🗑️ Envío cancelado") {
+                        Repo.cancelOutPending(p)
+                        refreshOutPending()
+                    }
+                }) { Text("Sí, cancelar") }
+            },
+            dismissButton = { TextButton(onClick = { toCancel = null }) { Text("No") } },
+        )
+    }
+}
+
+@Composable
+private fun PendingRow(p: OutPending, enabled: Boolean, onCancel: () -> Unit) {
+    // La miniatura es privada: se descarga con la sesión (el remitente puede leer lo suyo).
+    val thumb by produceState<ByteArray?>(null, p.thumbPath) {
+        value = p.thumbPath?.let { path -> runCatching { Repo.download(path) }.getOrNull() }
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Box(Modifier.size(56.dp).clip(RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
+            if (thumb != null) {
+                AsyncImage(model = thumb, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            } else {
+                Text(typeEmoji(p.type), style = MaterialTheme.typography.headlineSmall)
+            }
+        }
+        Column(Modifier.weight(1f)) {
+            Text("Para " + p.recipients.joinToString { it.name }, fontWeight = FontWeight.Bold)
+            p.caption?.let { Text(it, maxLines = 1) }
+            Text(
+                if (p.scheduled) "📅 " + DATE_TIME.format(OffsetDateTime.parse(p.deliverAt).toInstant())
+                else "⏳ Sin entregar a " + p.recipients.filter { !it.delivered }.joinToString { it.name },
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        TextButton(enabled = enabled, onClick = onCancel) { Text("Cancelar") }
+    }
+}
+
+private fun typeEmoji(type: String) = when (type) {
+    "ping" -> "💭"
+    "html" -> "🌸"
+    "drawing" -> "🎨"
+    "video" -> "🎬"
+    "gif" -> "✨"
+    else -> "📷"
+}
+
+/** Diálogos del sistema: primero fecha y luego hora. */
+private fun pickDateTime(ctx: Context, current: Instant?, onPicked: (Instant) -> Unit) {
+    val zone = ZoneId.systemDefault()
+    val start = LocalDateTime.ofInstant(current ?: Instant.now().plusSeconds(3600), zone)
+    DatePickerDialog(ctx, { _, y, m, d ->
+        TimePickerDialog(ctx, { _, h, min ->
+            onPicked(LocalDateTime.of(y, m + 1, d, h, min).atZone(zone).toInstant())
+        }, start.hour, start.minute, true).show()
+    }, start.year, start.monthValue - 1, start.dayOfMonth).apply {
+        datePicker.minDate = System.currentTimeMillis() - 1000
+    }.show()
 }
 
 @Composable
@@ -295,7 +437,13 @@ private fun openExternal(ctx: Context, item: HistoryItem) {
 }
 
 /** Prepara y envía una foto (redimensionada) o un GIF (tal cual). */
-private suspend fun sendMedia(ctx: Context, uri: Uri, recipients: List<String>) = withContext(Dispatchers.IO) {
+private suspend fun sendMedia(
+    ctx: Context,
+    uri: Uri,
+    recipients: List<String>,
+    caption: String?,
+    deliverAt: Instant?,
+) = withContext(Dispatchers.IO) {
     require(recipients.isNotEmpty()) { "Elige al menos un contacto" }
     val resolver = ctx.contentResolver
     val mime = resolver.getType(uri) ?: "image/jpeg"
@@ -304,9 +452,9 @@ private suspend fun sendMedia(ctx: Context, uri: Uri, recipients: List<String>) 
 
     if (mime == "image/gif") {
         require(bytes.size <= 10 * 1024 * 1024) { "El GIF no puede superar 10 MB" }
-        Repo.send(type = "gif", recipients = recipients, file = bytes, ext = "gif", mime = mime, thumb = thumb)
+        Repo.send(type = "gif", recipients = recipients, file = bytes, ext = "gif", mime = mime, thumb = thumb, caption = caption, deliverAt = deliverAt)
     } else {
         val jpeg = MediaSaver.prepareJpeg(bytes, 2048)
-        Repo.send(type = "photo", recipients = recipients, file = jpeg, ext = "jpg", mime = "image/jpeg", thumb = thumb)
+        Repo.send(type = "photo", recipients = recipients, file = jpeg, ext = "jpg", mime = "image/jpeg", thumb = thumb, caption = caption, deliverAt = deliverAt)
     }
 }

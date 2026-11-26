@@ -46,12 +46,12 @@ export default function Widget() {
         <>
           <div className="widget-main">
             <MediaView item={latest} />
+            {latest.caption && <span className="widget-caption">{latest.caption}</span>}
           </div>
           {size !== "small" && (
             <div className="widget-meta">
               <strong>{latest.senderName}</strong>
               <span>{new Date(latest.receivedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-              {latest.caption && <p>{latest.caption}</p>}
             </div>
           )}
           {size === "large" && (

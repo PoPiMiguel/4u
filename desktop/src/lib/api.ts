@@ -129,3 +129,70 @@ export function markSeen(messageId: string, userId: string) {
 export function react(messageId: string, userId: string, emoji: string | null) {
   return updateReceipt(messageId, userId, { reaction: emoji });
 }
+
+// ---------- Envíos en espera ----------
+
+export interface OutRecipient {
+  id: string;
+  name: string;
+  delivered: boolean;
+}
+
+/** Envío propio programado o que algún destinatario aún no ha recibido. */
+export interface OutPending {
+  id: string;
+  type: MessageType;
+  caption: string | null;
+  storagePath: string | null;
+  thumbPath: string | null;
+  status: "scheduled" | "sent";
+  deliverAt: string;
+  createdAt: string;
+  recipients: OutRecipient[];
+  /** URL firmada de la miniatura (si tiene). */
+  thumbUrl: string | null;
+}
+
+export async function listOutPending(): Promise<OutPending[]> {
+  const rows = check(await supabase.rpc("my_pending")) as {
+    id: string;
+    type: MessageType;
+    caption: string | null;
+    storage_path: string | null;
+    thumb_path: string | null;
+    status: "scheduled" | "sent";
+    deliver_at: string;
+    created_at: string;
+    recipients: OutRecipient[];
+  }[];
+
+  const thumbs = rows.map((r) => r.thumb_path).filter((p): p is string => !!p);
+  const urls = new Map<string, string>();
+  if (thumbs.length > 0) {
+    const { data } = await supabase.storage.from("media").createSignedUrls(thumbs, 3600);
+    for (const d of data ?? []) if (d.path && d.signedUrl) urls.set(d.path, d.signedUrl);
+  }
+
+  return rows.map((r) => ({
+    id: r.id,
+    type: r.type,
+    caption: r.caption,
+    storagePath: r.storage_path,
+    thumbPath: r.thumb_path,
+    status: r.status,
+    deliverAt: r.deliver_at,
+    createdAt: r.created_at,
+    recipients: r.recipients,
+    thumbUrl: r.thumb_path ? urls.get(r.thumb_path) ?? null : null,
+  }));
+}
+
+/** Cancela un envío en espera. Si se borra entero, borra también sus archivos. */
+export async function cancelOutPending(item: OutPending): Promise<void> {
+  const deleted = check(await supabase.rpc("cancel_pending", { p_id: item.id })) as boolean;
+  const paths = [item.storagePath, item.thumbPath].filter((p): p is string => !!p);
+  if (deleted && paths.length > 0) {
+    const { error } = await supabase.storage.from("media").remove(paths);
+    if (error) console.error("No se pudieron borrar los archivos", error);
+  }
+}
