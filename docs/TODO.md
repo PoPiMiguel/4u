@@ -33,7 +33,7 @@ Estado: ✅ hecho · 🟡 escrito sin probar · ⬜ pendiente
 - ✅ Foto Android → escritorio (Realtime + notificación + widget)
 - 🟡 Widget Android con 3 tamaños (probado el que sale por defecto)
 - 🟡 Widget escritorio con 3 tamaños
-- 🟡 Texto del envío pequeño en una esquina de la imagen (widgets de escritorio y Android)
+- ✅ Texto del envío pequeño en una esquina de la imagen (widgets de escritorio y Android)
 - 🟡 Historial básico
 - ⬜ Configurar el widget de Android por contacto (actividad de configuración + `GlanceAppWidgetManager`)
 - ⬜ Arranque automático del escritorio (`tauri-plugin-autostart`)
@@ -59,8 +59,8 @@ Estado: ✅ hecho · 🟡 escrito sin probar · ⬜ pendiente
 ## M6 — Programados
 - ✅ Backend (pg_cron + RLS)
 - ✅ Escritorio: selector de fecha y hora
-- 🟡 Android: selector de fecha y hora (diálogos del sistema) y campo de texto
-- 🟡 Lista «En espera» (programados y enviados sin entregar) con cancelar, escritorio y Android:
+- ✅ Android: selector de fecha y hora (diálogos del sistema) y campo de texto
+- ✅ Lista «En espera» (programados y enviados sin entregar) con cancelar, escritorio y Android:
   RPC `my_pending` y `cancel_pending` (migración `…_pending.sql`); al borrarse entero, el cliente borra los archivos.
   Un enviado se cancela solo para quien aún no lo ha recibido.
 
