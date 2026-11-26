@@ -33,7 +33,8 @@ Se consideran programados solo si `deliver_at` cae a más de 30 s vista; si no, 
 - Funciones protegidas con la cabecera `x-4u-secret`, porque no hay JWT de usuario. Las URL y secretos se guardan en Vault, no en el repo.
 
 ## 7. El servidor es un buzón temporal
-Los archivos se borran de Storage cuando **todos** los destinatarios confirman la descarga (`downloaded_at`), o a los **30 días**. Lo hace `purge` (pg_cron diario). Los metadatos se quedan (`status = purged`).
+Los originales se borran de Storage a los **30 días** y las miniaturas a los **180** (`purge`, pg_cron diario). Los metadatos se quedan (`status = purged` cuando ya no hay original).
+Antes se borraban en cuanto todos los destinatarios los descargaban, pero entonces el segundo dispositivo de la misma persona (o volver a entrar) ya no los encontraba: ver §17.
 El borrado va por Edge Function y no por SQL, porque Supabase no permite borrar `storage.objects` directamente desde SQL.
 
 ## 8. Límites de tamaño
@@ -97,3 +98,8 @@ En Cuenta hay un botón para quitar la optimización de batería. Después de un
 - Los perfiles (nombre y avatar) de un contacto bloqueado siguen siendo visibles para quien lo tiene en la lista (`private.has_contact_row`).
 - Avatares en el bucket privado `avatars`, ruta `{uid}/{uuid}.jpg` (256 px). Cada cambio crea un nombre nuevo (las cachés no se quedan con la vieja) y borra el anterior.
 - **Enviados** (`my_sent`): como `purge` borra las miniaturas en cuanto todos descargan, el emisor guarda en local una miniatura pequeña de lo que envía.
+
+## 17. Varios dispositivos por cuenta
+La entrega se lleva **por dispositivo** (`message_deliveries`): cada uno pide lo que le falta con `device_inbox` (últimos 180 días, del más antiguo al más nuevo) y lo confirma con `mark_device_delivered`. La primera confirmación de la persona sigue marcando `delivered_at`/`downloaded_at` en `message_recipients` (lo que ve el remitente). El escritorio también se registra en `devices` (`linux`/`windows`, sin token FCM).
+Al entrar en un dispositivo nuevo se carga ese historial: con original si tiene menos de 30 días; si no, solo la miniatura. Solo se avisa de lo reciente (menos de 1 h) y sin ver.
+**Cerrar sesión** borra la fila del dispositivo (y en cascada sus entregas) y el historial local, así que al volver a entrar se carga todo otra vez.

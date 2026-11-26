@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { loadHistory } from "../lib/store";
+import { loadHistory, pinnedId } from "../lib/store";
 import type { HistoryItem, WidgetSize } from "../lib/types";
 import MediaView from "../components/MediaView";
 
@@ -12,6 +12,7 @@ function initialSize(): WidgetSize {
 
 export default function Widget() {
   const [items, setItems] = useState<HistoryItem[]>(loadHistory);
+  const [pinned, setPinnedState] = useState<string | null>(pinnedId);
   const [size, setSize] = useState<WidgetSize>(initialSize);
   const [shake, setShake] = useState(false);
 
@@ -20,7 +21,10 @@ export default function Widget() {
   }, [size]);
 
   useEffect(() => {
-    const reload = () => setItems(loadHistory());
+    const reload = () => {
+      setItems(loadHistory());
+      setPinnedState(pinnedId());
+    };
     const unNew = listen<HistoryItem>("inbox:new", (e) => {
       reload();
       if (e.payload.type === "ping") {
@@ -29,15 +33,18 @@ export default function Widget() {
       }
     });
     const unSize = listen<WidgetSize>("widget:size", (e) => setSize(e.payload));
+    const unPin = listen("widget:pin", reload);
     window.addEventListener("storage", reload);
     return () => {
       unNew.then((f) => f());
       unSize.then((f) => f());
+      unPin.then((f) => f());
       window.removeEventListener("storage", reload);
     };
   }, []);
 
-  const latest = items[0];
+  // Lo fijado manda; si no hay nada fijado (o ya no existe), lo último.
+  const latest = items.find((i) => i.id === pinned) ?? items[0];
 
   return (
     <div className={`widget ${size}${shake ? " shake" : ""}`} onDoubleClick={() => invoke("show_main")}>
@@ -56,7 +63,7 @@ export default function Widget() {
           )}
           {size === "large" && (
             <div className="widget-strip">
-              {items.slice(1, 4).map((i) => (
+              {items.filter((i) => i.id !== latest.id).slice(0, 3).map((i) => (
                 <div key={i.id} className="widget-thumb">
                   <MediaView item={i} compact />
                 </div>

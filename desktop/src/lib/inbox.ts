@@ -1,28 +1,32 @@
 import { invoke } from "@tauri-apps/api/core";
 import { emit } from "@tauri-apps/api/event";
 import { supabase } from "./supabase";
-import { fetchPending, markDownloaded, type PendingMessage } from "./api";
+import { deviceInbox, markDeviceDelivered, type InboxMessage } from "./api";
+import { deviceId, registerDevice } from "./device";
 import { addToHistory, hasItem } from "./store";
 import { notify } from "./notify";
 import type { HistoryItem } from "./types";
 
 // Solo la ventana principal sincroniza. El widget se entera por el evento "inbox:new".
+// Cada dispositivo pide lo que le falta (device_inbox): así el PC y el móvil de
+// la misma cuenta reciben lo mismo, y al entrar en uno nuevo se carga el historial.
 
 let running = false;
 let again = false;
 
-export async function syncInbox(userId: string): Promise<void> {
+export async function syncInbox(_userId: string): Promise<void> {
   if (running) {
     again = true;
     return;
   }
   running = true;
   try {
+    await registerDevice();
     do {
       again = false;
-      for (const m of await fetchPending(userId)) {
+      for (const m of await deviceInbox(deviceId())) {
         try {
-          await processOne(userId, m);
+          await processOne(m);
         } catch (e) {
           console.error("Error procesando", m.id, e);
         }
@@ -42,40 +46,51 @@ const BODY: Record<string, string> = {
   drawing: "Dibujo nuevo",
 };
 
-async function processOne(userId: string, m: PendingMessage) {
-  // Ya descargado antes pero sin confirmar (fallo de red): solo confirmar.
+/** Solo se avisa de lo reciente y sin ver (no del historial que se carga al entrar). */
+const NOTIFY_WINDOW_MS = 60 * 60 * 1000;
+
+async function download(path: string, fileName: string, kind: string): Promise<string> {
+  const { data, error } = await supabase.storage.from("media").createSignedUrl(path, 300);
+  if (error) throw error;
+  return invoke<string>("download_media", { url: data.signedUrl, fileName, kind });
+}
+
+async function processOne(m: InboxMessage) {
+  // Ya lo tengo en local (p. ej. falló la confirmación): solo confirmar.
   if (hasItem(m.id)) {
-    await markDownloaded(m.id, userId);
+    await markDeviceDelivered(deviceId(), m.id);
     return;
   }
 
   let localPath: string | null = null;
+  let thumbPath: string | null = null;
   if (m.storage_path) {
-    const { data, error } = await supabase.storage.from("media").createSignedUrl(m.storage_path, 300);
-    if (error) throw error;
     const ext = m.storage_path.split(".").pop() ?? "bin";
-    localPath = await invoke<string>("download_media", {
-      url: data.signedUrl,
-      fileName: `4u_${m.id}.${ext}`,
-      kind: m.type,
-    });
+    localPath = await download(m.storage_path, `4u_${m.id}.${ext}`, m.type);
+  } else if (m.thumb_path) {
+    // El original ya caducó (30 días): queda la miniatura.
+    thumbPath = await download(m.thumb_path, `4u_${m.id}_thumb.jpg`, "thumb");
   }
 
   const item: HistoryItem = {
     id: m.id,
     type: m.type,
     senderId: m.sender_id,
-    senderName: m.sender?.display_name ?? "Alguien",
+    senderName: m.sender_name ?? "Alguien",
     caption: m.caption,
     localPath,
-    receivedAt: new Date().toISOString(),
-    seen: false,
-    reaction: null,
+    thumbPath,
+    expired: !m.storage_path && m.type !== "ping",
+    receivedAt: m.sent_at,
+    seen: m.seen,
+    reaction: m.reaction,
   };
   addToHistory(item);
-  await markDownloaded(m.id, userId);
+  await markDeviceDelivered(deviceId(), m.id);
   await emit("inbox:new", item);
-  await notify(item.senderName, item.caption || BODY[item.type] || "Nuevo mensaje");
+  if (!m.seen && Date.now() - new Date(m.sent_at).getTime() < NOTIFY_WINDOW_MS) {
+    await notify(item.senderName, item.caption || BODY[item.type] || "Mensaje nuevo");
+  }
 }
 
 /** Escucha cambios en tiempo real. Devuelve la función para cancelar. */

@@ -45,7 +45,7 @@ import java.util.Date
 
 /**
  * Widget con 3 tamaños:
- *  - pequeño: último elemento
+ *  - pequeño: el mensaje fijado (si lo hay) o el último
  *  - mediano: último + remitente y hora
  *  - grande: último + remitente y hora + tira con los 3 anteriores
  * El texto del envío va pequeño en la esquina inferior izquierda de la imagen.
@@ -64,7 +64,10 @@ class FourUWidget : GlanceAppWidget() {
     override val sizeMode = SizeMode.Responsive(setOf(SMALL, MEDIUM, LARGE))
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val items = LocalStore.history(context).take(4)
+        // Lo fijado manda (Recibidos → fijar); si no, lo último.
+        val all = LocalStore.history(context)
+        val pinned = LocalStore.pinnedId(context)?.let { id -> all.firstOrNull { it.id == id } }
+        val items = (listOfNotNull(pinned) + all.filterNot { it.id == pinned?.id }).take(4)
         val thumbs = items.map { item -> item.thumbPath?.let { BitmapFactory.decodeFile(it) } }
         provideContent { WidgetContent(items, thumbs) }
     }

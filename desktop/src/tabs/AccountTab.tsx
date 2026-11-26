@@ -7,7 +7,7 @@ import type { Update } from "@tauri-apps/plugin-updater";
 import { getProfile, setAvatar, setDisplayName, type Profile } from "../lib/api";
 import { avatarJpeg } from "../lib/media";
 import { findUpdate, installUpdate } from "../lib/updates";
-import { supabase } from "../lib/supabase";
+import { signOutClean } from "../lib/session";
 import type { WidgetSize } from "../lib/types";
 import Avatar from "../components/Avatar";
 import Icon from "../components/Icon";
@@ -150,7 +150,7 @@ export default function AccountTab({ userId, busy, guard }: Props) {
         {checked && !update && <p className="muted">Estás al día (o se actualiza con el gestor de paquetes).</p>}
       </section>
 
-      <button className="ghost danger-text" onClick={() => supabase.auth.signOut()}>
+      <button className="ghost danger-text" onClick={() => signOutClean()}>
         <Icon name="logout" size={18} />
         Cerrar sesión
       </button>

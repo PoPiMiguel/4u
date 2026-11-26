@@ -20,6 +20,10 @@ export interface HistoryItem {
   senderName: string;
   caption: string | null;
   localPath: string | null;
+  /** Miniatura en local cuando el original ya caducó en el servidor. */
+  thumbPath?: string | null;
+  expired?: boolean;
+  /** Cuándo se envió (orden del historial). */
   receivedAt: string;
   seen: boolean;
   reaction: string | null;

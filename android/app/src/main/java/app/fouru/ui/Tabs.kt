@@ -28,12 +28,11 @@ import androidx.compose.material.icons.outlined.Create
 import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material.icons.outlined.Star
-import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -99,12 +98,18 @@ fun relativeTime(millis: Long): String {
 // ---------------------------------------------------------------- Recibidos
 
 @Composable
-fun InboxTab(history: List<HistoryItem>, onReact: (HistoryItem, String) -> Unit, onSeen: (HistoryItem) -> Unit) {
+fun InboxTab(
+    history: List<HistoryItem>,
+    pinned: String?,
+    onReact: (HistoryItem, String) -> Unit,
+    onSeen: (HistoryItem) -> Unit,
+    onPin: (HistoryItem?) -> Unit,
+) {
     if (history.isEmpty()) return Empty(Icons.Outlined.Email, "Cuando te envíen algo, aparecerá aquí.")
     LazyColumn(contentPadding = pagePadding, verticalArrangement = Arrangement.spacedBy(14.dp)) {
         items(history, key = { it.id }) { item ->
             LaunchedEffect(item.id) { if (!item.seen) onSeen(item) }
-            if (item.type == "ping") PingCard(item) else PostCard(item, onReact)
+            if (item.type == "ping") PingCard(item) else PostCard(item, pinned == item.id, onReact, onPin)
         }
     }
 }
@@ -128,7 +133,7 @@ private fun PingCard(item: HistoryItem) {
 }
 
 @Composable
-private fun PostCard(item: HistoryItem, onReact: (HistoryItem, String) -> Unit) {
+private fun PostCard(item: HistoryItem, isPinned: Boolean, onReact: (HistoryItem, String) -> Unit, onPin: (HistoryItem?) -> Unit) {
     val ctx = LocalContext.current
     Column(
         Modifier
@@ -137,9 +142,17 @@ private fun PostCard(item: HistoryItem, onReact: (HistoryItem, String) -> Unit) 
             .background(FourUColors.Surface)
             .border(1.dp, FourUColors.Line, RoundedCornerShape(16.dp)),
     ) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(item.senderName, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
             Text(relativeTime(item.receivedAt), color = FourUColors.Muted, style = MaterialTheme.typography.bodySmall)
+            IconButton(onClick = { onPin(if (isPinned) null else item) }) {
+                Icon(
+                    AppIcons.Pin,
+                    contentDescription = if (isPinned) "Quitar del widget" else "Fijar en el widget",
+                    tint = if (isPinned) FourUColors.Accent else FourUColors.Muted,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
         }
         Box(
             Modifier
@@ -208,8 +221,8 @@ fun ComposeTab(
     onClearDate: () -> Unit,
     busy: Boolean,
     onMedia: () -> Unit,
+    onCamera: () -> Unit,
     onDraw: () -> Unit,
-    onHtml: () -> Unit,
     onPing: () -> Unit,
 ) {
     val available = contacts.filter { !it.blocked }
@@ -256,13 +269,13 @@ fun ComposeTab(
         item { Section(if (deliverAt != null) "Programar" else "Enviar") }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Choice(Icons.Outlined.Add, "Foto o vídeo", canSend, Modifier.weight(1f), onMedia)
-                Choice(Icons.Outlined.Create, "Dibujo", canSend, Modifier.weight(1f), onDraw)
+                Choice(AppIcons.Image, "Elegir foto o vídeo", canSend, Modifier.weight(1f), onMedia)
+                Choice(AppIcons.Camera, "Hacer foto", canSend, Modifier.weight(1f), onCamera)
             }
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Choice(Icons.Outlined.Star, "Animación HTML", canSend, Modifier.weight(1f), onHtml)
+                Choice(Icons.Outlined.Create, "Dibujo", canSend, Modifier.weight(1f), onDraw)
                 Choice(Icons.Outlined.FavoriteBorder, "Toque", canSend, Modifier.weight(1f), onPing)
             }
         }

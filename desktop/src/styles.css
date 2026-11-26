@@ -167,7 +167,9 @@ button.link { background: none; border: none; color: var(--muted); padding: 4px;
 /* ---------- Recibidos ---------- */
 .feed { display: flex; flex-direction: column; gap: 14px; }
 .post { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
-.post header { display: flex; justify-content: space-between; align-items: baseline; padding: 12px 14px; }
+.post header { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 14px; }
+.post header strong { flex: 1; }
+.icon-button.pin.on { color: var(--accent); background: var(--accent-soft); }
 .post time, .ping-card time { color: var(--muted); font-size: 0.85em; }
 .post-media { position: relative; aspect-ratio: 4 / 3; max-height: 420px; width: 100%; background: #000; overflow: hidden; }
 .post-media > * { position: absolute; inset: 0; }

@@ -148,32 +148,27 @@ export async function sendMessage(userId: string, opts: SendOptions): Promise<st
   return id;
 }
 
-export interface PendingMessage {
+export interface InboxMessage {
   id: string;
   type: MessageType;
   storage_path: string | null;
+  thumb_path: string | null;
   caption: string | null;
   sender_id: string;
-  created_at: string;
-  sender: { display_name: string } | null;
+  sender_name: string;
+  sent_at: string;
+  seen: boolean;
+  reaction: string | null;
 }
 
-/** Mensajes recibidos aún no descargados en este usuario. */
-export async function fetchPending(userId: string): Promise<PendingMessage[]> {
-  const rows = check(
-    await supabase
-      .from("message_recipients")
-      .select(
-        "message_id, message:messages!message_recipients_message_id_fkey(id, type, storage_path, caption, sender_id, created_at, sender:profiles!messages_sender_id_fkey(display_name))",
-      )
-      .eq("recipient_id", userId)
-      .is("downloaded_at", null),
-  ) as unknown as { message_id: string; message: PendingMessage | null }[];
+/** Lo que le falta a este dispositivo (últimos 180 días), del más antiguo al más nuevo. */
+export async function deviceInbox(device: string): Promise<InboxMessage[]> {
+  return check(await supabase.rpc("device_inbox", { p_device: device })) as InboxMessage[];
+}
 
-  return rows
-    .map((r) => r.message)
-    .filter((m): m is PendingMessage => !!m)
-    .sort((a, b) => a.created_at.localeCompare(b.created_at));
+/** Este dispositivo ya lo tiene (y, la primera vez, cuenta como entregado). */
+export async function markDeviceDelivered(device: string, messageId: string) {
+  check(await supabase.rpc("mark_device_delivered", { p_device: device, p_message: messageId }));
 }
 
 async function updateReceipt(messageId: string, userId: string, patch: Record<string, string | null>) {
@@ -184,11 +179,6 @@ async function updateReceipt(messageId: string, userId: string, patch: Record<st
       .eq("message_id", messageId)
       .eq("recipient_id", userId),
   );
-}
-
-export function markDownloaded(messageId: string, userId: string) {
-  const now = new Date().toISOString();
-  return updateReceipt(messageId, userId, { delivered_at: now, downloaded_at: now });
 }
 
 export function markSeen(messageId: string, userId: string) {

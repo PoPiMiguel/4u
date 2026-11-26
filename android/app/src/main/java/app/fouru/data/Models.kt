@@ -99,3 +99,18 @@ data class SentItem(
     @SerialName("sent_at") val sentAt: String? = null,
     val recipients: List<SentRecipient> = emptyList(),
 )
+
+/** Lo que le falta a este dispositivo (RPC device_inbox). */
+@Serializable
+data class InboxMessage(
+    val id: String,
+    val type: String,
+    @SerialName("storage_path") val storagePath: String? = null,
+    @SerialName("thumb_path") val thumbPath: String? = null,
+    val caption: String? = null,
+    @SerialName("sender_id") val senderId: String,
+    @SerialName("sender_name") val senderName: String? = null,
+    @SerialName("sent_at") val sentAt: String,
+    val seen: Boolean = false,
+    val reaction: String? = null,
+)

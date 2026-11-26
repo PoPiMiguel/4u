@@ -12,7 +12,8 @@ import {
   type SentItem,
 } from "../lib/api";
 import { subscribeInbox, syncInbox } from "../lib/inbox";
-import { loadHistory, updateHistoryItem } from "../lib/store";
+import { loadHistory, pinnedId, setPinned, updateHistoryItem } from "../lib/store";
+import { emit } from "@tauri-apps/api/event";
 import { sentThumbs } from "../lib/sentCache";
 import type { Contact, HistoryItem } from "../lib/types";
 import Icon, { type IconName } from "../components/Icon";
@@ -40,6 +41,7 @@ export default function Home({ userId }: { userId: string }) {
   const [outPending, setOutPending] = useState<OutPending[]>([]);
   const [sent, setSent] = useState<SentItem[]>([]);
   const [localThumbs, setLocalThumbs] = useState(sentThumbs);
+  const [pinned, setPinnedState] = useState<string | null>(pinnedId);
 
   const refreshHistory = () => setHistory(loadHistory());
   const refreshContacts = () => listContacts(userId).then(setContacts);
@@ -168,7 +170,18 @@ export default function Home({ userId }: { userId: string }) {
 
       <div className="pager" ref={pager} onScroll={onScroll}>
         <div className="page">
-          <InboxTab items={history} onReact={reactTo} />
+          <InboxTab
+            items={history}
+            pinned={pinned}
+            onReact={reactTo}
+            onPin={(item) =>
+              guard(async () => {
+                setPinned(item?.id ?? null);
+                setPinnedState(item?.id ?? null);
+                await emit("widget:pin");
+              }, item ? "Fijado en el widget" : "Quitado del widget")
+            }
+          />
         </div>
         <div className="page">
           <ComposeTab userId={userId} contacts={contacts} busy={busy} guard={guard} onSent={refreshOutgoing} />

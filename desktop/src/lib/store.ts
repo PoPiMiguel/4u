@@ -26,8 +26,24 @@ export function hasItem(id: string): boolean {
   return loadHistory().some((i) => i.id === id);
 }
 
+/** Inserta en orden (lo más nuevo primero): al entrar se carga historial antiguo. */
 export function addToHistory(item: HistoryItem) {
-  save([item, ...loadHistory().filter((i) => i.id !== item.id)]);
+  const items = [item, ...loadHistory().filter((i) => i.id !== item.id)];
+  items.sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
+  save(items);
+}
+
+// ---------- Mensaje fijado en el widget ----------
+
+const PINNED = "4u.widgetPinned";
+
+export function pinnedId(): string | null {
+  return localStorage.getItem(PINNED);
+}
+
+export function setPinned(id: string | null) {
+  if (id) localStorage.setItem(PINNED, id);
+  else localStorage.removeItem(PINNED);
 }
 
 export function updateHistoryItem(id: string, patch: Partial<HistoryItem>) {

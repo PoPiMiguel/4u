@@ -81,6 +81,9 @@ import app.fouru.data.SentItem
 import app.fouru.data.Supa
 import app.fouru.data.VideoPrep
 import app.fouru.push.InboxWorker
+import app.fouru.widget.FourUWidget
+import androidx.core.content.FileProvider
+import androidx.glance.appwidget.updateAll
 import coil3.compose.AsyncImage
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.status.SessionStatus
@@ -100,7 +103,6 @@ private data class Tab(val label: String, val icon: ImageVector)
 private val DATE_TIME: DateTimeFormatter =
     DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT).withZone(ZoneId.systemDefault())
 
-private const val HTML_MAX_BYTES = 2 * 1024 * 1024
 private const val GIF_MAX_BYTES = 10 * 1024 * 1024
 
 class MainActivity : ComponentActivity() {
@@ -236,9 +238,13 @@ private fun HomeScreen() {
     val mediaPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) sendPrepared("Preparando…") { prepareMedia(ctx, uri) }
     }
-    val htmlPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) sendPrepared("Enviando animación…") { prepareHtml(ctx, uri) }
+    // "Hacer foto": la app de cámara guarda en un archivo nuestro (FileProvider).
+    var cameraUri by remember { mutableStateOf<Uri?>(null) }
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        val uri = cameraUri
+        if (ok && uri != null) sendPrepared("Preparando…") { prepareMedia(ctx, uri) }
     }
+    var pinned by remember { mutableStateOf(LocalStore.pinnedId(ctx)) }
 
     LaunchedEffect(Unit) {
         if (Build.VERSION.SDK_INT >= 33) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -313,6 +319,14 @@ private fun HomeScreen() {
             when (page) {
                 0 -> InboxTab(
                     history = history,
+                    pinned = pinned,
+                    onPin = { item ->
+                        launchSafe(if (item != null) "Fijado en el widget" else "Quitado del widget") {
+                            LocalStore.setPinned(ctx, item?.id)
+                            pinned = item?.id
+                            FourUWidget().updateAll(ctx)
+                        }
+                    },
                     onReact = { item, emoji ->
                         launchSafe {
                             val value = if (item.reaction == emoji) null else emoji
@@ -341,8 +355,12 @@ private fun HomeScreen() {
                     onClearDate = { deliverAt = null },
                     busy = busy,
                     onMedia = { mediaPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
+                    onCamera = {
+                        val uri = newCameraUri(ctx)
+                        cameraUri = uri
+                        camera.launch(uri)
+                    },
                     onDraw = { drawing = true },
-                    onHtml = { htmlPicker.launch(arrayOf("text/html")) },
                     onPing = {
                         val to = selected.toList()
                         launchSafe("Toque enviado") {
@@ -444,20 +462,25 @@ private suspend fun prepareMedia(ctx: Context, uri: Uri): Prepared {
 
     return withContext(Dispatchers.IO) {
         val bytes = resolver.openInputStream(uri)?.use { it.readBytes() } ?: error("No se pudo leer el archivo")
-        val thumb = MediaSaver.decodeScaled(bytes, 512)?.let { MediaSaver.jpeg(it, 80) }
         if (mime == "image/gif") {
             require(bytes.size <= GIF_MAX_BYTES) { "El GIF no puede superar 10 MB" }
+            val thumb = MediaSaver.decodeScaled(bytes, 512)?.let { MediaSaver.jpeg(it, 80) }
             Prepared("gif", bytes, "gif", mime, thumb)
         } else {
-            Prepared("photo", MediaSaver.prepareJpeg(bytes, 2048), "jpg", "image/jpeg", thumb)
+            // La miniatura sale de la foto ya girada según su EXIF.
+            val jpeg = MediaSaver.prepareJpeg(bytes, 2048)
+            val thumb = MediaSaver.decodeScaled(jpeg, 512)?.let { MediaSaver.jpeg(it, 80) }
+            Prepared("photo", jpeg, "jpg", "image/jpeg", thumb)
         }
     }
 }
 
-private suspend fun prepareHtml(ctx: Context, uri: Uri): Prepared = withContext(Dispatchers.IO) {
-    val bytes = ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: error("No se pudo leer el archivo")
-    require(bytes.size <= HTML_MAX_BYTES) { "La animación HTML no puede superar 2 MB" }
-    Prepared("html", bytes, "html", "text/html", null)
+/** Archivo temporal para la cámara (cache/camera, compartido por FileProvider). */
+private fun newCameraUri(ctx: Context): Uri {
+    val dir = File(ctx.cacheDir, "camera").apply { mkdirs() }
+    dir.listFiles()?.forEach { it.delete() }
+    val file = File(dir, "foto-${System.currentTimeMillis()}.jpg")
+    return FileProvider.getUriForFile(ctx, "${ctx.packageName}.files", file)
 }
 
 private suspend fun prepareDrawing(d: Drawing): Prepared = withContext(Dispatchers.Default) {

@@ -6,7 +6,14 @@ import { relativeTime } from "../lib/time";
 const REACTIONS = ["❤️", "😂", "😮", "😢", "🔥"];
 
 /** Lo recibido, como un muro de tarjetas. */
-export default function InboxTab({ items, onReact }: { items: HistoryItem[]; onReact: (i: HistoryItem, r: string) => void }) {
+interface Props {
+  items: HistoryItem[];
+  pinned: string | null;
+  onReact: (i: HistoryItem, r: string) => void;
+  onPin: (i: HistoryItem | null) => void;
+}
+
+export default function InboxTab({ items, pinned, onReact, onPin }: Props) {
   if (items.length === 0) {
     return (
       <div className="empty">
@@ -32,6 +39,13 @@ export default function InboxTab({ items, onReact }: { items: HistoryItem[]; onR
             <header>
               <strong>{item.senderName}</strong>
               <time>{relativeTime(item.receivedAt)}</time>
+              <button
+                className={`icon-button pin${pinned === item.id ? " on" : ""}`}
+                onClick={() => onPin(pinned === item.id ? null : item)}
+                title={pinned === item.id ? "Quitar del widget" : "Fijar en el widget"}
+              >
+                <Icon name="pin" size={18} />
+              </button>
             </header>
             <div className="post-media">
               <MediaView item={item} />

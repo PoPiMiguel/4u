@@ -40,7 +40,18 @@ object Repo {
         }
     }
 
-    suspend fun signOut() = supabase.auth.signOut()
+    /**
+     * Cierra sesión dejando el dispositivo limpio: borra su fila en `devices`
+     * (y con ella lo que el servidor sabe que ya descargó) y el historial local,
+     * para que al volver a entrar se cargue todo de nuevo.
+     */
+    suspend fun signOut(ctx: Context) {
+        runCatching {
+            supabase.from("devices").delete { filter { eq("id", LocalStore.deviceId(ctx)) } }
+        }
+        LocalStore.clear(ctx)
+        supabase.auth.signOut()
+    }
 
     suspend fun registerDevice(ctx: Context) {
         val token = FirebaseMessaging.getInstance().token.await()
@@ -168,7 +179,21 @@ object Repo {
         }
     }
 
-    // ---------- Recepción ----------
+    // ---------- Recepción (por dispositivo) ----------
+    /** Lo que le falta a este dispositivo (últimos 180 días), del más antiguo al más nuevo. */
+    suspend fun deviceInbox(ctx: Context): List<InboxMessage> =
+        supabase.postgrest.rpc("device_inbox", buildJsonObject { put("p_device", LocalStore.deviceId(ctx)) })
+            .decodeList<InboxMessage>()
+
+    /** Este dispositivo ya lo tiene (y, la primera vez, cuenta como entregado). */
+    suspend fun markDeviceDelivered(ctx: Context, messageId: String) {
+        supabase.postgrest.rpc("mark_device_delivered", buildJsonObject {
+            put("p_device", LocalStore.deviceId(ctx))
+            put("p_message", messageId)
+        })
+    }
+
+    // ---------- Recepción (antiguo, por persona) ----------
     suspend fun pending(): List<MessageRow> =
         supabase.from("message_recipients")
             .select(

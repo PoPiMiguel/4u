@@ -109,7 +109,7 @@ fun AccountSection(busy: Boolean, launchSafe: (String?, suspend () -> Unit) -> U
                 batteryFree = isBatteryFree(ctx)
             }) { Text("Permitir en segundo plano") }
         }
-        TextButton(onClick = { launchSafe(null) { Repo.signOut() } }) { Text("Cerrar sesión") }
+        TextButton(onClick = { launchSafe(null) { Repo.signOut(ctx) } }) { Text("Cerrar sesión") }
     }
 }
 

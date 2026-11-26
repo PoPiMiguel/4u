@@ -65,6 +65,16 @@ fn toggle_widget(app: AppHandle) -> Result<bool, String> {
     Ok(!visible)
 }
 
+/// Plataforma para la tabla devices.
+#[tauri::command]
+fn platform() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "windows"
+    } else {
+        "linux"
+    }
+}
+
 /// El actualizador integrado solo sirve en Windows, macOS y la AppImage de Linux.
 /// Instalado con pacman (PKGBUILD 4u-bin) o .deb, actualiza el gestor de paquetes.
 #[tauri::command]
@@ -146,6 +156,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             download_media,
             updater_supported,
+            platform,
             set_widget_size,
             toggle_widget,
             show_main

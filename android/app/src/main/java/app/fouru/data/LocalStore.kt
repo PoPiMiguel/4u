@@ -25,8 +25,26 @@ object LocalStore {
 
     fun contains(ctx: Context, id: String): Boolean = history(ctx).any { it.id == id }
 
+    /** Inserta en orden (lo más nuevo primero): al entrar se carga historial antiguo. */
     fun add(ctx: Context, item: HistoryItem) = synchronized(lock) {
-        write(ctx, (listOf(item) + history(ctx).filterNot { it.id == item.id }).take(MAX_ITEMS))
+        write(ctx, (listOf(item) + history(ctx).filterNot { it.id == item.id }).sortedByDescending { it.receivedAt }.take(MAX_ITEMS))
+    }
+
+    /** Al cerrar sesión: historial, miniaturas, archivos privados y lo fijado. */
+    fun clear(ctx: Context) = synchronized(lock) {
+        file(ctx).delete()
+        listOf("thumbs", "sent", "media").forEach { File(ctx.filesDir, it).deleteRecursively() }
+        setPinned(ctx, null)
+    }
+
+    // ---------- Mensaje fijado en el widget ----------
+    fun pinnedId(ctx: Context): String? =
+        ctx.getSharedPreferences("4u", Context.MODE_PRIVATE).getString("widget_pinned", null)
+
+    fun setPinned(ctx: Context, id: String?) {
+        ctx.getSharedPreferences("4u", Context.MODE_PRIVATE).edit().apply {
+            if (id == null) remove("widget_pinned") else putString("widget_pinned", id)
+        }.apply()
     }
 
     fun update(ctx: Context, id: String, transform: (HistoryItem) -> HistoryItem) = synchronized(lock) {

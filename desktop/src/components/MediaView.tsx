@@ -12,6 +12,8 @@ export default function MediaView({ item, compact = false }: { item: HistoryItem
         <Icon name="pulse" size={40} />
       </div>
     );
+  // Original caducado en el servidor antes de llegar a este dispositivo: la miniatura.
+  if (!item.localPath && item.thumbPath) return <img className="media" src={convertFileSrc(item.thumbPath)} alt="" />;
   if (!item.localPath) return <div className="media emoji">…</div>;
 
   const src = convertFileSrc(item.localPath);
