@@ -1161,7 +1161,7 @@ dependencies = [
 
 [[package]]
 name = "fouru"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "reqwest 0.12.28",
  "serde",
