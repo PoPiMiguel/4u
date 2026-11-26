@@ -1,6 +1,12 @@
-# Genera instaladores al crear un tag vX.Y.Z (borrador de release en GitHub).
-# Secretos necesarios: SUPABASE_URL, SUPABASE_ANON_KEY, GOOGLE_SERVICES_JSON_B64.
-# Requiere el Gradle wrapper subido al repo (ver docs/SETUP-ARCH.md §6).
+# Publica una versión al empujar un tag vX.Y.Z (lo hace scripts/release.sh):
+#  - Escritorio: instaladores de Windows (.msi/.exe) y Linux (.AppImage/.deb),
+#    firmados para el actualizador, y latest.json (lo consulta la app).
+#  - Android: APK de release firmado con el keystore fijo.
+# La release se publica directamente (no borrador): el actualizador lee
+# releases/latest/download/latest.json.
+# Secretos: SUPABASE_URL, SUPABASE_ANON_KEY, GOOGLE_SERVICES_JSON_B64,
+#   TAURI_SIGNING_PRIVATE_KEY, TAURI_SIGNING_PRIVATE_KEY_PASSWORD,
+#   ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS.
 name: release
 
 on:
@@ -50,13 +56,18 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: desktop
           tagName: ${{ github.ref_name }}
           releaseName: "4u ${{ github.ref_name }}"
-          releaseDraft: true
+          releaseDraft: false
+          includeUpdaterJson: true
 
   android:
+    # Después del escritorio: así la release ya existe y solo se le añade el APK.
+    needs: desktop
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -71,16 +82,24 @@ jobs:
       - name: google-services.json
         run: echo "${{ secrets.GOOGLE_SERVICES_JSON_B64 }}" | base64 -d > android/app/google-services.json
 
-      # TODO(M7): assembleRelease firmado con keystore (secretos) en vez de debug.
-      - name: Compilar APK
+      - name: Keystore de release
+        run: echo "${{ secrets.ANDROID_KEYSTORE_B64 }}" | base64 -d > "$RUNNER_TEMP/4u-release.jks"
+
+      - name: Compilar APK firmado
         working-directory: android
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-        run: ./gradlew assembleDebug
+          RELEASE_STORE_FILE: ${{ runner.temp }}/4u-release.jks
+          RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          ./gradlew assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/4u-${GITHUB_REF_NAME}.apk"
 
       - uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          draft: true
-          files: android/app/build/outputs/apk/debug/*.apk
+          draft: false
+          files: ${{ runner.temp }}/4u-${{ github.ref_name }}.apk

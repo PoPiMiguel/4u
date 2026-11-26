@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.PowerManager
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -42,6 +44,7 @@ fun AccountSection(busy: Boolean, launchSafe: (String?, suspend () -> Unit) -> U
     var name by remember { mutableStateOf("") }
     var update by remember { mutableStateOf<Updates.Available?>(null) }
     var checked by remember { mutableStateOf(false) }
+    var batteryFree by remember { mutableStateOf(isBatteryFree(ctx)) }
 
     suspend fun reload() {
         Repo.profile().also {
@@ -97,7 +100,27 @@ fun AccountSection(busy: Boolean, launchSafe: (String?, suspend () -> Unit) -> U
                 if (checked) Text("Estás al día", style = MaterialTheme.typography.bodySmall)
             }
         }
+        if (!batteryFree) {
+            Text(
+                "Para que los avisos lleguen con la app cerrada, deja que 4u funcione en segundo plano.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            OutlinedButton(onClick = {
+                requestBatteryFree(ctx)
+                batteryFree = isBatteryFree(ctx)
+            }) { Text("Permitir en segundo plano") }
+        }
         TextButton(onClick = { launchSafe(null) { Repo.signOut() } }) { Text("Cerrar sesión") }
+    }
+}
+
+private fun isBatteryFree(ctx: Context): Boolean =
+    ctx.getSystemService(PowerManager::class.java)?.isIgnoringBatteryOptimizations(ctx.packageName) == true
+
+@android.annotation.SuppressLint("BatteryLife")
+private fun requestBatteryFree(ctx: Context) {
+    runCatching {
+        ctx.startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${ctx.packageName}")))
     }
 }
 

@@ -70,13 +70,30 @@ Se envían los trazos como JSON (`storage_path`, para reproducir el dibujo "dibu
 { "w": 1, "h": 1.5, "bg": "#000000",
   "strokes": [ { "color": "#e84a6f", "width": 0.01, "points": [[x, y, tMs], ...] } ] }
 ```
-Coordenadas normalizadas entre 0 y 1 para que se vea igual en cualquier pantalla.
+Coordenadas normalizadas entre 0 y 1 para que se vea igual en cualquier pantalla: `x` sobre el ancho e `y` sobre el alto; `w`/`h` solo dan la proporción (2:3, vertical). `width` es el grosor relativo al ancho.
+`t` son milisegundos desde el principio, pero las pausas entre trazos se recortan a 350 ms, y la reproducción se acelera para durar 6 s como mucho.
+El PNG final va como JPEG (`thumb.jpg`), igual que el resto de miniaturas. Implementación: `desktop/src/lib/drawing.ts` y `android/.../data/Drawing.kt`.
 
 ## 13. Versiones Android
 `minSdk 29` (Android 10): MediaStore sin permisos de almacenamiento. `targetSdk 35`.
 Las versiones de las librerías son de finales de 2024; Android Studio propondrá subirlas.
 
 ## 14. Actualizaciones (M7)
-- **Escritorio**: plugin updater de Tauri + `latest.json` firmado en GitHub Releases.
+El repo es **público** para que las releases se puedan descargar sin sesión (los secretos nunca han estado en git).
+Una única versión para todo: la de `desktop/src-tauri/tauri.conf.json`; Android la lee al compilar (`versionCode = major·10000 + minor·100 + patch`). `scripts/release.sh X.Y.Z` la sube, hace tag y lanza el CI.
+- **Escritorio**: plugin updater de Tauri + `latest.json` firmado en GitHub Releases (`releases/latest/download/latest.json`, por eso las releases no son borradores).
+  En Linux solo se actualiza sola la AppImage; instalado con pacman (`packaging/arch/PKGBUILD`, `4u-bin`, solo local) se actualiza con el PKGBUILD.
 - **Android**: la app consulta `releases/latest` en la API de GitHub y ofrece descargar el APK.
   Hace falta **un keystore de release fijo**: los APK de depuración firmados en máquinas distintas no se pueden actualizar uno encima de otro.
+
+## 15. Notificaciones con la app cerrada (Android)
+La push de FCM es solo de datos. Al llegar, `PushService` **muestra la notificación al momento** con lo que trae (remitente, tipo y texto) y después encola la descarga.
+Si se esperase a la descarga, Android (y más Samsung) puede retrasar el trabajo con la app cerrada, y FCM rebaja la prioridad de las push de alta prioridad que no muestran nada.
+El worker vuelve a publicar la misma notificación (mismo id) con `setOnlyAlertOnce`, así que no suena dos veces.
+En Cuenta hay un botón para quitar la optimización de batería. Después de un "Forzar detención", Android no entrega push hasta abrir la app una vez.
+
+## 16. Contactos y avatares
+- **Eliminar** borra la relación en los dos sentidos (`remove_contact`); para volver a hablar hace falta otro código. **Bloquear** solo cambia tu fila.
+- Los perfiles (nombre y avatar) de un contacto bloqueado siguen siendo visibles para quien lo tiene en la lista (`private.has_contact_row`).
+- Avatares en el bucket privado `avatars`, ruta `{uid}/{uuid}.jpg` (256 px). Cada cambio crea un nombre nuevo (las cachés no se quedan con la vieja) y borra el anterior.
+- **Enviados** (`my_sent`): como `purge` borra las miniaturas en cuanto todos descargan, el emisor guarda en local una miniatura pequeña de lo que envía.

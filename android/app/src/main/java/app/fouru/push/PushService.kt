@@ -32,6 +32,15 @@ class PushService : FirebaseMessagingService() {
         val data = message.data
         when (data["kind"]) {
             "message" -> {
+                // Notificación al momento con lo que trae la push: no depende de que
+                // Android deje correr la descarga (con la app cerrada puede tardar).
+                Notifier.incoming(
+                    this,
+                    data["message_id"].orEmpty(),
+                    data["sender_name"].orEmpty(),
+                    data["type"].orEmpty(),
+                    data["caption"],
+                )
                 if (data["type"] == "ping") Notifier.vibratePing(this)
                 InboxWorker.enqueue(this)
             }

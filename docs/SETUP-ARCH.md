@@ -175,3 +175,35 @@ Si algo falla:
 - **Panel → Edge Functions → notify → Logs**: errores de push.
 - **Panel → Database → Logs**: errores de triggers y pg_net.
 - `select * from net._http_response order by created desc limit 10;` → respuestas de las llamadas a funciones.
+
+## 8. Publicar una versión
+
+Una sola vez (secretos del CI, leídos de `desktop/.env`, `android/app/google-services.json` y `~/.secrets`):
+
+```bash
+scripts/ci-secrets.sh
+```
+
+Claves que viven fuera del repo, en `~/.secrets` (guárdalas también en otro sitio: sin ellas no se pueden firmar actualizaciones):
+- `4u-release.jks` + `4u-release.pass`: firma del APK (alias `4u`). Si se pierde, los móviles tendrán que desinstalar para instalar la siguiente.
+- `4u-updater.key` + `4u-updater.pass`: firma de las actualizaciones del escritorio (la clave pública está en `tauri.conf.json`).
+
+Para compilar en local el release de Android, `android/local.properties` lleva `RELEASE_STORE_FILE`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS` y `RELEASE_KEY_PASSWORD`.
+`npm run tauri build` en local necesita `TAURI_SIGNING_PRIVATE_KEY` y `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` en el entorno.
+
+Cada versión:
+
+```bash
+scripts/release.sh 0.3.0     # sube la versión, commit, tag v0.3.0 y push
+gh run watch                 # el CI publica instaladores, APK y latest.json
+```
+
+En este PC (Arch) se instala con el paquete local:
+
+```bash
+cd packaging/arch
+sed -i 's/^pkgver=.*/pkgver=0.3.0/' PKGBUILD
+updpkgsums && makepkg -si
+```
+
+**Del APK de depuración al de release**: están firmados con claves distintas, así que la primera vez hay que desinstalar la de depuración (se pierde el historial local del móvil y hay que volver a iniciar sesión).

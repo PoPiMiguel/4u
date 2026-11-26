@@ -38,36 +38,45 @@ object Notifier {
 
     @SuppressLint("MissingPermission")
     private fun show(ctx: Context, id: Int, title: String, body: String) {
-        if (Build.VERSION.SDK_INT >= 33 &&
-            ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) return
+        if (!canNotify(ctx)) return
         val n = NotificationCompat.Builder(ctx, CH_MESSAGES)
             .setSmallIcon(R.drawable.ic_logo)
             .setContentTitle(title)
             .setContentText(body)
             .setAutoCancel(true)
+            // La push la muestra al llegar y el worker la actualiza al descargar: suena una vez.
+            .setOnlyAlertOnce(true)
             .setContentIntent(openApp(ctx))
             .build()
         NotificationManagerCompat.from(ctx).notify(id, n)
     }
 
-    fun message(ctx: Context, item: HistoryItem) {
-        val body = item.caption ?: when (item.type) {
-            "ping" -> "Está pensando en ti 💭"
-            "photo" -> "📷 Foto nueva"
-            "video" -> "🎬 Vídeo nuevo"
-            "gif" -> "✨ GIF nuevo"
-            "html" -> "🌸 Animación nueva"
-            "drawing" -> "🎨 Dibujo nuevo"
-            else -> "Nuevo mensaje"
-        }
-        show(ctx, item.id.hashCode(), item.senderName, body)
+    private fun canNotify(ctx: Context): Boolean =
+        Build.VERSION.SDK_INT < 33 ||
+            ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+
+    private fun body(type: String, caption: String?): String = caption?.takeIf { it.isNotBlank() } ?: when (type) {
+        "ping" -> "Está pensando en ti"
+        "photo" -> "Foto nueva"
+        "video" -> "Vídeo nuevo"
+        "gif" -> "GIF nuevo"
+        "html" -> "Animación nueva"
+        "drawing" -> "Dibujo nuevo"
+        else -> "Mensaje nuevo"
     }
+
+    /** Al llegar la push, antes de descargar nada (funciona con la app cerrada). */
+    fun incoming(ctx: Context, messageId: String, sender: String, type: String, caption: String?) =
+        show(ctx, messageId.hashCode(), sender.ifEmpty { "4u" }, body(type, caption))
+
+    /** Tras descargar (mismo id que [incoming]: si ya se mostró, no vuelve a sonar). */
+    fun message(ctx: Context, item: HistoryItem) =
+        show(ctx, item.id.hashCode(), item.senderName, body(item.type, item.caption))
 
     fun receipt(ctx: Context, name: String, reaction: String, seen: Boolean) {
         val body = when {
             reaction.isNotEmpty() -> "Ha reaccionado $reaction"
-            seen -> "Lo ha visto 👀"
+            seen -> "Lo ha visto"
             else -> return
         }
         show(ctx, (name + reaction + seen).hashCode(), name.ifEmpty { "4u" }, body)

@@ -16,6 +16,14 @@ val localProps = Properties().apply {
 }
 fun config(name: String): String = localProps.getProperty(name) ?: System.getenv(name) ?: ""
 
+// Una sola versión para todo el proyecto: la de desktop/src-tauri/tauri.conf.json
+// (la sube scripts/release.sh). versionCode = major·10000 + minor·100 + patch.
+val appVersion: String = Regex("\"version\"\\s*:\\s*\"([0-9.]+)\"")
+    .find(rootProject.file("../desktop/src-tauri/tauri.conf.json").readText())
+    ?.groupValues?.get(1) ?: "0.0.0"
+val appVersionCode: Int = appVersion.split('.').map { it.toIntOrNull() ?: 0 }
+    .let { (it.getOrElse(0) { 0 } * 10000) + (it.getOrElse(1) { 0 } * 100) + it.getOrElse(2) { 0 } }
+
 android {
     namespace = "app.fouru"
     compileSdk = 35
@@ -24,17 +32,31 @@ android {
         applicationId = "app.fouru"
         minSdk = 29
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = appVersionCode
+        versionName = appVersion
 
         buildConfigField("String", "SUPABASE_URL", "\"${config("SUPABASE_URL")}\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"${config("SUPABASE_ANON_KEY")}\"")
     }
 
+    // Keystore de release fijo (DECISIONS §14). En local: RELEASE_* en local.properties;
+    // en el CI: variables de entorno con el mismo nombre (secretos de GitHub).
+    signingConfigs {
+        create("release") {
+            val store = config("RELEASE_STORE_FILE")
+            if (store.isNotEmpty()) {
+                storeFile = file(store)
+                storePassword = config("RELEASE_STORE_PASSWORD")
+                keyAlias = config("RELEASE_KEY_ALIAS")
+                keyPassword = config("RELEASE_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
-            // TODO(M7): signingConfig con keystore propio (ver docs/TODO.md).
+            signingConfig = signingConfigs.getByName("release").takeIf { it.storeFile != null }
         }
     }
 

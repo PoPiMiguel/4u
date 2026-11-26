@@ -1,0 +1,22 @@
+# Paquete local de 4u para Arch (no se publica en AUR).
+# Reempaqueta el .deb de la release de GitHub.
+#   cd packaging/arch && updpkgsums && makepkg -si
+# Para actualizar: cambia pkgver, updpkgsums y makepkg -si otra vez
+# (en Linux el actualizador integrado solo funciona con la AppImage).
+pkgname=4u-bin
+pkgver=0.2.0
+pkgrel=1
+pkgdesc="4u: fotos, vídeos, dibujos y animaciones que salen en un widget de la otra persona"
+arch=('x86_64')
+url="https://github.com/PoPiMiguel/4u"
+license=('custom')
+depends=('gtk3' 'webkit2gtk-4.1' 'libayatana-appindicator' 'hicolor-icon-theme')
+provides=('4u')
+conflicts=('4u')
+options=('!strip' '!debug')
+source=("4u_${pkgver}_amd64.deb::${url}/releases/download/v${pkgver}/4u_${pkgver}_amd64.deb")
+sha256sums=('SKIP')
+
+package() {
+  bsdtar -xf data.tar.gz -C "$pkgdir"
+}

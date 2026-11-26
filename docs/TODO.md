@@ -24,9 +24,9 @@ Estado: ✅ hecho · 🟡 escrito sin probar · ⬜ pendiente
 ## M1 — Cuentas y contactos
 - ✅ Registro / login (escritorio y Android)
 - ✅ Código de invitación y aceptar
-- ⬜ QR del código (escritorio: mostrar; Android: escanear con CameraX/ML Kit o pegar)
-- ⬜ Renombrar contacto (`nickname`), bloquear / desbloquear, eliminar
-- ⬜ Avatar (bucket `avatars` + política)
+- 🟡 QR del código: escritorio y Android lo muestran; Android escanea con el escáner de Google Play (sin permiso de cámara)
+- 🟡 Renombrar contacto (`nickname`), bloquear / desbloquear, eliminar (en los dos sentidos, `remove_contact`)
+- 🟡 Avatar y nombre propios (bucket privado `avatars`)
 
 ## M2 — Primer envío
 - ✅ Foto escritorio → Android (push + widget)
@@ -36,25 +36,25 @@ Estado: ✅ hecho · 🟡 escrito sin probar · ⬜ pendiente
 - ✅ Texto del envío pequeño en una esquina de la imagen (widgets de escritorio y Android)
 - 🟡 Historial básico
 - ⬜ Configurar el widget de Android por contacto (actividad de configuración + `GlanceAppWidgetManager`)
-- ⬜ Arranque automático del escritorio (`tauri-plugin-autostart`)
-- ⬜ Recordar la posición del widget de escritorio (`tauri-plugin-window-state`)
+- 🟡 Arranque automático del escritorio (`tauri-plugin-autostart`, arranca con `--hidden`: bandeja y widget)
+- 🟡 Recordar la posición del widget de escritorio (`tauri-plugin-window-state`, solo posición)
 
 ## M3 — Más contenido
 - 🟡 Escritorio: enviar GIF, HTML y vídeo ≤ 15 MB
 - ⬜ Escritorio: comprimir vídeo con ffmpeg (en Linux, el del sistema; en Windows, sidecar)
-- ⬜ Android: enviar vídeo (Media3 Transformer → 720p) y HTML (selector de documentos)
-- ⬜ Android: reproductor a pantalla completa (WebView aislado para HTML, ExoPlayer para vídeo)
+- 🟡 Android: enviar vídeo (Media3 Transformer, lado corto 720 px, ~2 Mbps, máx. 15 MB) y HTML (selector de documentos)
+- 🟡 Android: visor a pantalla completa (`ViewerActivity`: ExoPlayer, WebView sin red ni archivos, dibujo animado)
 - ⬜ Android: fotogramas del HTML/GIF para el widget (WebView offscreen → N bitmaps → ViewFlipper)
 - ⬜ Historial en SQLite / Room
 
 ## M4 — Interacción
 - ✅ Reacciones y "visto" (escritorio y Android)
 - ✅ Toque 💭 (vibración en Android, temblor del widget en escritorio)
-- ⬜ Mostrar al emisor el estado de lo que envió (entregado / visto / reacción) en una vista "Enviados"
+- 🟡 Vista "Enviados" con el estado por destinatario (`my_sent`), escritorio y Android
 
 ## M5 — Lienzo
-- ⬜ Componente de dibujo (escritorio: canvas; Android: Compose Canvas)
-- ⬜ Formato de trazos ([DECISIONS.md §12](DECISIONS.md#12-dibujo-m5)) + reproducción animada
+- 🟡 Componente de dibujo (escritorio: canvas; Android: Compose Canvas en un diálogo a pantalla completa)
+- 🟡 Formato de trazos ([DECISIONS.md §12](DECISIONS.md#12-dibujo-m5)) + reproducción animada (escritorio: historial y widget; Android: visor)
 
 ## M6 — Programados
 - ✅ Backend (pg_cron + RLS)
@@ -65,11 +65,13 @@ Estado: ✅ hecho · 🟡 escrito sin probar · ⬜ pendiente
   Un enviado se cancela solo para quien aún no lo ha recibido.
 
 ## M7 — Distribución
-- ⬜ Keystore de release Android + `signingConfig` + secretos en GitHub
-- ⬜ Updater Tauri (`tauri-plugin-updater`, claves con `npx tauri signer generate`)
-- ⬜ Android: comprobar actualizaciones en GitHub Releases
+- 🟡 Keystore de release Android (`~/.secrets/4u-release.jks`) + `signingConfig`; secretos en GitHub con `scripts/ci-secrets.sh`
+- 🟡 Updater Tauri (`tauri-plugin-updater`; clave en `~/.secrets/4u-updater.key`; solo Windows y AppImage)
+- 🟡 Android: comprobar actualizaciones en GitHub Releases (Cuenta → «Descargar la X.Y.Z»)
 - ⬜ Limpiar subidas huérfanas en `purge`
-- ⬜ PKGBUILD `4u-bin` para AUR
+- 🟡 `scripts/release.sh X.Y.Z`: versión única (tauri.conf.json), tag y CI con release publicada (no borrador)
+- 🟡 Notificaciones Android con la app cerrada: se muestran al llegar la push ([DECISIONS.md §15](DECISIONS.md#15-notificaciones-con-la-app-cerrada-android)); botón para quitar la optimización de batería
+- 🟡 PKGBUILD `4u-bin` local (`packaging/arch`, no se publica en AUR)
 
 ## M8 — Hyprland
 - ⬜ Widget en la capa `background` con `gtk-layer-shell` (crate `gtk-layer-shell`, sobre el `gtk::ApplicationWindow` de Tauri, solo en Linux)
