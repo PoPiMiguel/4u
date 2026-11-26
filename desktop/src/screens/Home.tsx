@@ -1,6 +1,4 @@
-import { useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { emit } from "@tauri-apps/api/event";
+import { useEffect, useRef, useState } from "react";
 import { errorMessage } from "../lib/supabase";
 import {
   cancelOutPending,
@@ -13,30 +11,31 @@ import {
   type OutPending,
   type SentItem,
 } from "../lib/api";
-import { prepareFile, tinyDataUrl, type PreparedFile } from "../lib/media";
-import { renderJpeg, type Drawing } from "../lib/drawing";
 import { subscribeInbox, syncInbox } from "../lib/inbox";
 import { loadHistory, updateHistoryItem } from "../lib/store";
-import { rememberSentThumb, sentThumbs } from "../lib/sentCache";
-import type { Contact, HistoryItem, WidgetSize } from "../lib/types";
-import MediaView from "../components/MediaView";
-import ContactsPanel from "../components/ContactsPanel";
-import AccountPanel from "../components/AccountPanel";
-import DrawPad from "../components/DrawPad";
-import { PendingPanel, SentPanel } from "../components/OutgoingPanels";
+import { sentThumbs } from "../lib/sentCache";
+import type { Contact, HistoryItem } from "../lib/types";
+import Icon, { type IconName } from "../components/Icon";
+import InboxTab from "../tabs/InboxTab";
+import ComposeTab from "../tabs/ComposeTab";
+import OutboxTab from "../tabs/OutboxTab";
+import ContactsTab from "../tabs/ContactsTab";
+import AccountTab from "../tabs/AccountTab";
 
-const REACTIONS = ["❤️", "😂", "😮", "😢", "🔥"];
+const TABS: { key: string; label: string; icon: IconName }[] = [
+  { key: "inbox", label: "Recibidos", icon: "inbox" },
+  { key: "compose", label: "Enviar", icon: "send" },
+  { key: "outbox", label: "Enviados", icon: "outbox" },
+  { key: "contacts", label: "Contactos", icon: "users" },
+  { key: "account", label: "Cuenta", icon: "user" },
+];
 
 export default function Home({ userId }: { userId: string }) {
+  const [tab, setTab] = useState(0);
+  const pager = useRef<HTMLDivElement>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [history, setHistory] = useState<HistoryItem[]>(loadHistory);
-  const [file, setFile] = useState<File | null>(null);
-  const [drawing, setDrawing] = useState<Drawing | null>(null);
-  const [drawingOpen, setDrawingOpen] = useState(false);
-  const [caption, setCaption] = useState("");
-  const [when, setWhen] = useState("");
-  const [status, setStatus] = useState<string | null>(null);
+  const [status, setStatus] = useState<{ text: string; error: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
   const [outPending, setOutPending] = useState<OutPending[]>([]);
   const [sent, setSent] = useState<SentItem[]>([]);
@@ -60,16 +59,23 @@ export default function Home({ userId }: { userId: string }) {
     setStatus(null);
     try {
       await fn();
-      if (ok) setStatus(ok);
+      if (ok) setStatus({ text: ok, error: false });
     } catch (e) {
-      setStatus(`Error: ${errorMessage(e)}`);
+      setStatus({ text: errorMessage(e), error: true });
     } finally {
       setBusy(false);
     }
   }
 
+  // El aviso se va solo.
   useEffect(() => {
-    refreshContacts().catch((e) => setStatus(errorMessage(e)));
+    if (!status) return;
+    const t = setTimeout(() => setStatus(null), status.error ? 6000 : 2500);
+    return () => clearTimeout(t);
+  }, [status]);
+
+  useEffect(() => {
+    refreshContacts().catch((e) => setStatus({ text: errorMessage(e), error: true }));
     syncInbox(userId).then(refreshHistory).catch(console.error);
     refreshOutgoing();
     // Programados que salen, entregas, vistos y contactos que cambian desde el otro lado.
@@ -84,60 +90,52 @@ export default function Home({ userId }: { userId: string }) {
     };
   }, [userId]);
 
-  // Marcar como visto lo que aparece en pantalla.
+  // Lo recibido cuenta como visto cuando abres la pestaña Recibidos.
   useEffect(() => {
+    if (tab !== 0) return;
     for (const item of history) {
       if (!item.seen) {
         updateHistoryItem(item.id, { seen: true });
         markSeen(item.id, userId).catch(console.error);
       }
     }
-  }, [history, userId]);
+  }, [history, userId, tab]);
 
-  function toggle(id: string) {
-    const next = new Set(selected);
-    next.has(id) ? next.delete(id) : next.add(id);
-    setSelected(next);
+  // Cambiar de pestaña con las flechas (si no estás escribiendo).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      if (t.closest("input, textarea, select")) return;
+      if (e.key === "ArrowRight") go(Math.min(TABS.length - 1, tab + 1));
+      if (e.key === "ArrowLeft") go(Math.max(0, tab - 1));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [tab]);
+
+  // Al cambiar el tamaño de la ventana, que la página siga encajada.
+  useEffect(() => {
+    const onResize = () => {
+      const el = pager.current;
+      if (el) el.scrollLeft = tab * el.clientWidth;
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [tab]);
+
+  function go(i: number) {
+    const el = pager.current;
+    if (!el) return;
+    el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
+    setTab(i);
   }
 
-  const recipients = () => {
-    const list = [...selected].filter((id) => contacts.some((c) => c.contactId === id && c.status === "accepted"));
-    if (list.length === 0) throw new Error("Elige al menos un contacto");
-    return list;
-  };
-
-  async function prepared(): Promise<PreparedFile> {
-    if (drawing) {
-      const json = new Blob([JSON.stringify(drawing)], { type: "application/json" });
-      return { type: "drawing", file: json, ext: "json", mime: "application/json", thumb: await renderJpeg(drawing) };
-    }
-    if (!file) throw new Error("Elige un archivo o haz un dibujo");
-    return prepareFile(file);
+  function onScroll() {
+    const el = pager.current;
+    if (!el) return;
+    const i = Math.round(el.scrollLeft / el.clientWidth);
+    if (i !== tab) setTab(i);
   }
-
-  const send = () =>
-    guard(async () => {
-      const to = recipients();
-      const deliverAt = when ? new Date(when) : null;
-      if (deliverAt && deliverAt.getTime() <= Date.now()) throw new Error("Esa hora ya ha pasado");
-      const p = await prepared();
-      const id = await sendMessage(userId, {
-        type: p.type,
-        recipients: to,
-        file: p.file,
-        ext: p.ext,
-        mime: p.mime,
-        thumb: p.thumb,
-        caption: caption.trim() || null,
-        deliverAt,
-      });
-      if (p.thumb) rememberSentThumb(id, await tinyDataUrl(p.thumb).catch(() => ""));
-      setFile(null);
-      setDrawing(null);
-      setCaption("");
-      setWhen("");
-      await refreshOutgoing();
-    }, when ? "Programado" : "Enviado");
 
   const ping = (contactId: string) =>
     guard(async () => {
@@ -159,119 +157,54 @@ export default function Home({ userId }: { userId: string }) {
       refreshHistory();
     });
 
-  const setWidgetSize = (size: WidgetSize) =>
-    guard(async () => {
-      localStorage.setItem("4u.widgetSize", size);
-      await emit("widget:size", size);
-    });
-
-  const ready = !!file || !!drawing;
+  const unseen = history.filter((h) => !h.seen).length;
 
   return (
-    <div className="home">
-      <header>
-        <h1>4u</h1>
-        <div className="row">
-          <button onClick={() => guard(async () => void (await invoke("toggle_widget")))}>Widget</button>
-          {(["small", "medium", "large"] as WidgetSize[]).map((s) => (
-            <button key={s} onClick={() => setWidgetSize(s)}>
-              {s === "small" ? "S" : s === "medium" ? "M" : "L"}
-            </button>
-          ))}
-        </div>
+    <div className="shell">
+      <header className="topbar">
+        <span className="wordmark">4u</span>
+        <h1>{TABS[tab].label}</h1>
       </header>
 
-      {status && <p className="status">{status}</p>}
-
-      <ContactsPanel
-        userId={userId}
-        contacts={contacts}
-        selected={selected}
-        busy={busy}
-        onToggle={toggle}
-        onPing={ping}
-        onChanged={refreshContacts}
-        guard={guard}
-      />
-
-      <section className="card">
-        <h2>Enviar</h2>
-        {drawingOpen ? (
-          <DrawPad
-            onCancel={() => setDrawingOpen(false)}
-            onDone={(d) => {
-              setDrawing(d);
-              setFile(null);
-              setDrawingOpen(false);
-            }}
+      <div className="pager" ref={pager} onScroll={onScroll}>
+        <div className="page">
+          <InboxTab items={history} onReact={reactTo} />
+        </div>
+        <div className="page">
+          <ComposeTab userId={userId} contacts={contacts} busy={busy} guard={guard} onSent={refreshOutgoing} />
+        </div>
+        <div className="page">
+          <OutboxTab pending={outPending} sent={sent} localThumbs={localThumbs} busy={busy} onCancel={cancel} />
+        </div>
+        <div className="page">
+          <ContactsTab
+            userId={userId}
+            contacts={contacts}
+            busy={busy}
+            onPing={ping}
+            onChanged={refreshContacts}
+            guard={guard}
           />
-        ) : (
-          <>
-            <div className="row">
-              <label className="chip file-button">
-                {file ? file.name : "Elegir archivo"}
-                <input
-                  type="file"
-                  hidden
-                  accept="image/*,video/*,.gif,.html,.htm"
-                  onChange={(e) => {
-                    setFile(e.target.files?.[0] ?? null);
-                    setDrawing(null);
-                    e.target.value = "";
-                  }}
-                />
-              </label>
-              <button className="chip" onClick={() => setDrawingOpen(true)}>
-                {drawing ? "Nuevo dibujo" : "Dibujar"}
-              </button>
-              {drawing && (
-                <button className="chip" onClick={() => setDrawing(null)}>
-                  Quitar dibujo
-                </button>
-              )}
-            </div>
-            <input placeholder="Texto (opcional)" value={caption} onChange={(e) => setCaption(e.target.value)} maxLength={280} />
-            <label className="muted">
-              Programar (opcional)
-              <input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} />
-            </label>
-            <button disabled={busy || !ready || selected.size === 0} onClick={send}>
-              {when ? "Programar" : "Enviar"} {drawing ? "dibujo " : ""}a {selected.size} contacto(s)
-            </button>
-          </>
-        )}
-      </section>
+        </div>
+        <div className="page">
+          <AccountTab userId={userId} busy={busy} guard={guard} />
+        </div>
+      </div>
 
-      <PendingPanel items={outPending} busy={busy} onCancel={cancel} />
-      <SentPanel items={sent} localThumbs={localThumbs} />
+      {status && <div className={`toast${status.error ? " error" : ""}`}>{status.text}</div>}
 
-      <section className="card">
-        <h2>Recibidos</h2>
-        <ul className="history">
-          {history.map((item) => (
-            <li key={item.id}>
-              <div className="history-media">
-                <MediaView item={item} />
-              </div>
-              <div>
-                <strong>{item.senderName}</strong>{" "}
-                <span className="muted">{new Date(item.receivedAt).toLocaleString()}</span>
-                {item.caption && <p>{item.caption}</p>}
-                <div className="row">
-                  {REACTIONS.map((r) => (
-                    <button key={r} className={item.reaction === r ? "chip on" : "chip"} onClick={() => reactTo(item, r)}>
-                      {r}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </li>
-          ))}
-          {history.length === 0 && <li className="muted">Nada por aquí todavía</li>}
-        </ul>
-      </section>
-
-      <AccountPanel userId={userId} busy={busy} guard={guard} />
+      <nav className="tabbar">
+        {TABS.map((t, i) => (
+          <button key={t.key} className={i === tab ? "on" : ""} onClick={() => go(i)} aria-current={i === tab}>
+            <span className="tab-icon">
+              <Icon name={t.icon} size={22} />
+              {i === 0 && unseen > 0 && <span className="dot" />}
+              {i === 2 && outPending.length > 0 && <span className="count">{outPending.length}</span>}
+            </span>
+            {t.label}
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }

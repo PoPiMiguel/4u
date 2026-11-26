@@ -65,10 +65,9 @@ fun AccountSection(busy: Boolean, launchSafe: (String?, suspend () -> Unit) -> U
         }
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Cuenta", style = MaterialTheme.typography.titleMedium)
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Avatar(profile?.avatarPath, profile?.displayName ?: "?", 56.dp)
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Avatar(profile?.avatarPath, profile?.displayName ?: "?", 72.dp)
             OutlinedButton(enabled = !busy, onClick = {
                 picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
             }) { Text("Cambiar foto") }

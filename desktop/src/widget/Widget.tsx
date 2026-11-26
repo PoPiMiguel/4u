@@ -65,7 +65,7 @@ export default function Widget() {
           )}
         </>
       ) : (
-        <div className="widget-empty">4u 💌</div>
+        <div className="widget-empty">4u</div>
       )}
     </div>
   );

@@ -68,8 +68,16 @@ export async function renderJpeg(d: Drawing, maxSide = 512): Promise<Blob> {
   );
 }
 
+export const DEFAULT_BG = "#121216";
+
+/** Lee un dibujo rellenando lo que falte (las versiones 0.2.0 de Android no escribían bg/w/h). */
 export function parseDrawing(text: string): Drawing {
-  const d = JSON.parse(text) as Drawing;
+  const d = JSON.parse(text) as Partial<Drawing>;
   if (!d || !Array.isArray(d.strokes)) throw new Error("Dibujo no válido");
-  return d;
+  return {
+    w: typeof d.w === "number" ? d.w : 1,
+    h: typeof d.h === "number" ? d.h : ASPECT,
+    bg: typeof d.bg === "string" ? d.bg : DEFAULT_BG,
+    strokes: d.strokes,
+  };
 }

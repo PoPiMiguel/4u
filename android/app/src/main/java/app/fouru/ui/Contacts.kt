@@ -5,6 +5,14 @@ import android.graphics.Bitmap
 import android.graphics.Color as AColor
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,7 +24,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
@@ -81,24 +88,38 @@ fun InviteBlock(busy: Boolean, launchSafe: (String?, suspend () -> Unit) -> Unit
         onAdded()
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(enabled = !busy, onClick = { launchSafe(null) { invite = Repo.createInvite() } }) { Text("Generar código") }
-            invite?.let { Text(it, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold) }
-        }
-        if (qr != null) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Image(qr.asImageBitmap(), contentDescription = "QR del código", modifier = Modifier.size(140.dp).clip(RoundedCornerShape(8.dp)))
-                Text("Que lo escanee desde su 4u. Vale 24 h y un solo uso.", style = MaterialTheme.typography.bodySmall)
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(FourUColors.Surface)
+                .border(1.dp, FourUColors.Line, RoundedCornerShape(16.dp))
+                .padding(16.dp),
+        ) {
+            if (invite == null) {
+                Button(enabled = !busy, onClick = { launchSafe(null) { invite = Repo.createInvite() } }) {
+                    Text("Generar mi código")
+                }
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    qr?.let {
+                        Image(it.asImageBitmap(), contentDescription = "QR del código", modifier = Modifier.size(120.dp).clip(RoundedCornerShape(10.dp)))
+                    }
+                    Column {
+                        Text(invite.orEmpty(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, letterSpacing = 4.sp)
+                        Text("Que lo escanee o lo escriba en su 4u. Vale 24 h y un solo uso.", style = MaterialTheme.typography.bodySmall, color = FourUColors.Muted)
+                    }
+                }
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(code, { code = it.take(6).uppercase() }, label = { Text("Código") }, modifier = Modifier.weight(1f))
+            OutlinedTextField(code, { code = it.take(6).uppercase() }, label = { Text("Código de la otra persona") }, singleLine = true, modifier = Modifier.weight(1f))
             Button(enabled = !busy && code.length == 6, onClick = { accept(code) }) { Text("Añadir") }
         }
-        OutlinedButton(enabled = !busy, onClick = {
+        OutlinedButton(enabled = !busy, modifier = Modifier.fillMaxWidth(), onClick = {
             scanQr(ctx, onCode = { accept(it) }, onError = { launchSafe(null) { error(it) } })
-        }) { Text("Escanear QR") }
+        }) { Text("Escanear un QR") }
     }
 }
 
@@ -106,9 +127,7 @@ fun InviteBlock(busy: Boolean, launchSafe: (String?, suspend () -> Unit) -> Unit
 @Composable
 fun ContactItem(
     c: ContactRow,
-    checked: Boolean,
     busy: Boolean,
-    onCheck: (Boolean) -> Unit,
     onPing: () -> Unit,
     launchSafe: (String?, suspend () -> Unit) -> Unit,
     onChanged: suspend () -> Unit,
@@ -117,17 +136,24 @@ fun ContactItem(
     var renaming by remember { mutableStateOf(false) }
     var removing by remember { mutableStateOf(false) }
 
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Checkbox(checked = checked, enabled = !c.blocked, onCheckedChange = onCheck)
-        Avatar(c.avatarPath, c.name)
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Avatar(c.avatarPath, c.name, 44.dp)
         Column(Modifier.weight(1f)) {
-            Text(c.name)
-            val extra = listOfNotNull(c.displayName.takeIf { c.nickname != null }, "bloqueado".takeIf { c.blocked })
-            if (extra.isNotEmpty()) Text(extra.joinToString(" · "), style = MaterialTheme.typography.bodySmall)
+            Text(c.name, fontWeight = FontWeight.SemiBold)
+            val extra = listOfNotNull(c.displayName.takeIf { c.nickname != null }, "Bloqueado".takeIf { c.blocked })
+            if (extra.isNotEmpty()) Text(extra.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = FourUColors.Muted)
         }
-        TextButton(enabled = !busy && !c.blocked, onClick = onPing) { Text("Toque") }
+        IconButton(enabled = !busy && !c.blocked, onClick = onPing) {
+            Icon(Icons.Outlined.FavoriteBorder, contentDescription = "Enviar un toque", tint = FourUColors.Accent)
+        }
         Box {
-            TextButton(onClick = { menu = true }) { Text("···") }
+            IconButton(onClick = { menu = true }) {
+                Icon(Icons.Outlined.MoreVert, contentDescription = "Opciones", tint = FourUColors.Muted)
+            }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(text = { Text("Renombrar") }, onClick = { menu = false; renaming = true })
                 DropdownMenuItem(

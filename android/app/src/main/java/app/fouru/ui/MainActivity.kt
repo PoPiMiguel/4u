@@ -14,6 +14,24 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AccountCircle
+import androidx.compose.material.icons.outlined.DateRange
+import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Send
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -77,7 +95,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
-private val REACTIONS = listOf("❤️", "😂", "😮", "😢", "🔥")
+private data class Tab(val label: String, val icon: ImageVector)
 
 private val DATE_TIME: DateTimeFormatter =
     DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT).withZone(ZoneId.systemDefault())
@@ -90,8 +108,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         InboxWorker.enqueue(this)
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
-                Surface(Modifier.fillMaxSize()) { Root() }
+            FourUTheme {
+                Surface(Modifier.fillMaxSize(), color = FourUColors.Bg) { Root() }
             }
         }
     }
@@ -125,7 +143,7 @@ private fun LoginScreen() {
         Modifier.fillMaxSize().padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
     ) {
-        Text("4u", style = MaterialTheme.typography.headlineLarge)
+        Text("4u", color = FourUColors.Accent, fontWeight = FontWeight.ExtraBold, fontSize = 40.sp, letterSpacing = (-2).sp)
         if (signup) OutlinedTextField(name, { name = it }, label = { Text("Tu nombre") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(email, { email = it }, label = { Text("Email") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(password, { password = it }, label = { Text("Contraseña") }, modifier = Modifier.fillMaxWidth())
@@ -242,104 +260,124 @@ private fun HomeScreen() {
         }
     }
 
-    LazyColumn(
-        Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        item { Text("4u", style = MaterialTheme.typography.headlineMedium) }
+    val tabs = listOf(
+        Tab("Recibidos", Icons.Outlined.Email),
+        Tab("Enviar", Icons.Outlined.Send),
+        Tab("Enviados", Icons.Outlined.DateRange),
+        Tab("Contactos", Icons.Outlined.Person),
+        Tab("Cuenta", Icons.Outlined.AccountCircle),
+    )
+    val pager = rememberPagerState { tabs.size }
+    val unseen = history.count { !it.seen }
 
-        // Contactos
-        item {
-            Text("Contactos", style = MaterialTheme.typography.titleMedium)
-        }
-        item { InviteBlock(busy, ::launchSafe) { refreshContacts() } }
-        items(contacts, key = { "c-" + it.contactId }) { c ->
-            ContactItem(
-                c = c,
-                checked = c.contactId in selected,
-                busy = busy,
-                onCheck = { selected = if (it) selected + c.contactId else selected - c.contactId },
-                onPing = {
-                    launchSafe("Toque enviado") {
-                        Repo.send(type = "ping", recipients = listOf(c.contactId))
-                        refreshOutgoing()
-                    }
-                },
-                launchSafe = ::launchSafe,
-                onChanged = { refreshContacts() },
-            )
-        }
-        if (contacts.isEmpty()) item { Text("Aún no tienes contactos", style = MaterialTheme.typography.bodySmall) }
-
-        // Enviar
-        item {
-            HorizontalDivider()
-            Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Enviar", style = MaterialTheme.typography.titleMedium)
-                val names = contacts.filter { it.contactId in selected }.joinToString { it.name }
-                Text(if (names.isEmpty()) "Marca a quién en Contactos" else "Para: $names", style = MaterialTheme.typography.bodySmall)
-                OutlinedTextField(
-                    caption,
-                    { caption = it.take(280) },
-                    label = { Text("Texto (opcional)") },
-                    modifier = Modifier.fillMaxWidth(),
+    Scaffold(
+        containerColor = FourUColors.Bg,
+        topBar = {
+            Row(
+                Modifier.fillMaxWidth().statusBarsPadding().padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 10.dp),
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text("4u", color = FourUColors.Accent, fontWeight = FontWeight.ExtraBold, fontSize = 24.sp, letterSpacing = (-1).sp)
+                Text(tabs[pager.currentPage].label, style = MaterialTheme.typography.headlineSmall)
+            }
+        },
+        bottomBar = {
+            NavigationBar(containerColor = FourUColors.Bg, tonalElevation = 0.dp) {
+                tabs.forEachIndexed { i, t ->
+                    NavigationBarItem(
+                        selected = pager.currentPage == i,
+                        onClick = { scope.launch { pager.animateScrollToPage(i) } },
+                        icon = {
+                            BadgedBox(badge = {
+                                when {
+                                    i == 0 && unseen > 0 -> Badge(containerColor = FourUColors.Accent)
+                                    i == 2 && outPending.isNotEmpty() -> Badge(containerColor = FourUColors.Accent) { Text("${outPending.size}") }
+                                }
+                            }) { Icon(t.icon, contentDescription = t.label) }
+                        },
+                        label = { Text(t.label, fontSize = 11.sp) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = FourUColors.Accent,
+                            selectedTextColor = FourUColors.Text,
+                            indicatorColor = FourUColors.AccentSoft,
+                            unselectedIconColor = FourUColors.Muted,
+                            unselectedTextColor = FourUColors.Muted,
+                        ),
+                    )
+                }
+            }
+        },
+    ) { inner ->
+        HorizontalPager(state = pager, modifier = Modifier.fillMaxSize().padding(inner), beyondViewportPageCount = 1) { page ->
+            when (page) {
+                0 -> InboxTab(
+                    history = history,
+                    onReact = { item, emoji ->
+                        launchSafe {
+                            val value = if (item.reaction == emoji) null else emoji
+                            Repo.react(item.id, value)
+                            LocalStore.update(ctx, item.id) { it.copy(reaction = value) }
+                            history = LocalStore.history(ctx)
+                        }
+                    },
+                    onSeen = { item ->
+                        // Visto solo cuando de verdad estás en Recibidos.
+                        if (pager.currentPage == 0) scope.launch {
+                            runCatching { Repo.markSeen(item.id) }.onSuccess {
+                                LocalStore.update(ctx, item.id) { it.copy(seen = true) }
+                            }
+                        }
+                    },
                 )
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(enabled = !busy, onClick = { pickDateTime(ctx, deliverAt) { deliverAt = it } }) {
-                        Text(deliverAt?.let { "Programado: " + DATE_TIME.format(it) } ?: "Programar")
-                    }
-                    if (deliverAt != null) TextButton(onClick = { deliverAt = null }) { Text("Quitar") }
-                }
-                val canSend = !busy && selected.isNotEmpty()
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(enabled = canSend, modifier = Modifier.weight(1f), onClick = {
-                        mediaPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
-                    }) { Text("Foto o vídeo") }
-                    Button(enabled = canSend, modifier = Modifier.weight(1f), onClick = { drawing = true }) { Text("Dibujo") }
-                }
-                OutlinedButton(enabled = canSend, modifier = Modifier.fillMaxWidth(), onClick = {
-                    htmlPicker.launch(arrayOf("text/html"))
-                }) { Text("Animación HTML") }
+                1 -> ComposeTab(
+                    contacts = contacts,
+                    selected = selected,
+                    onToggle = { id -> selected = if (id in selected) selected - id else selected + id },
+                    caption = caption,
+                    onCaption = { caption = it },
+                    deliverAt = deliverAt,
+                    onPickDate = { pickDateTime(ctx, deliverAt) { deliverAt = it } },
+                    onClearDate = { deliverAt = null },
+                    busy = busy,
+                    onMedia = { mediaPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
+                    onDraw = { drawing = true },
+                    onHtml = { htmlPicker.launch(arrayOf("text/html")) },
+                    onPing = {
+                        val to = selected.toList()
+                        launchSafe("Toque enviado") {
+                            Repo.send(type = "ping", recipients = to)
+                            refreshOutgoing()
+                        }
+                    },
+                )
+                2 -> OutboxTab(outPending, sent, busy, onCancel = { toCancel = it })
+                3 -> ContactsTab(
+                    contacts = contacts,
+                    busy = busy,
+                    launchSafe = ::launchSafe,
+                    onChanged = { refreshContacts() },
+                    onPing = { c ->
+                        launchSafe("Toque enviado") {
+                            Repo.send(type = "ping", recipients = listOf(c.contactId))
+                            refreshOutgoing()
+                        }
+                    },
+                )
+                else -> AccountTab(busy, ::launchSafe)
             }
         }
+    }
 
-        // En espera
-        if (outPending.isNotEmpty()) {
-            item { Text("En espera", style = MaterialTheme.typography.titleMedium) }
-            items(outPending, key = { "out-" + it.id }) { p ->
-                PendingRow(p, enabled = !busy, onCancel = { toCancel = p })
+    // Al volver a Recibidos, lo que haya sin ver cuenta como visto.
+    LaunchedEffect(pager.currentPage, history) {
+        if (pager.currentPage != 0) return@LaunchedEffect
+        history.filter { !it.seen }.forEach { item ->
+            runCatching { Repo.markSeen(item.id) }.onSuccess {
+                LocalStore.update(ctx, item.id) { it.copy(seen = true) }
             }
         }
-
-        // Enviados
-        if (sent.isNotEmpty()) {
-            item { Text("Enviados", style = MaterialTheme.typography.titleMedium) }
-            items(sent.take(15), key = { "sent-" + it.id }) { SentRow(it) }
-        }
-
-        // Recibidos
-        item { Text("Recibidos", style = MaterialTheme.typography.titleMedium) }
-        items(history, key = { it.id }) { item ->
-            HistoryRow(item, onReact = { emoji ->
-                launchSafe {
-                    val value = if (item.reaction == emoji) null else emoji
-                    Repo.react(item.id, value)
-                    LocalStore.update(ctx, item.id) { it.copy(reaction = value) }
-                    history = LocalStore.history(ctx)
-                }
-            }, onSeen = {
-                scope.launch {
-                    runCatching { Repo.markSeen(item.id) }.onSuccess {
-                        LocalStore.update(ctx, item.id) { it.copy(seen = true) }
-                    }
-                }
-            })
-        }
-
-        item {
-            HorizontalDivider()
-            Box(Modifier.padding(top = 12.dp)) { AccountSection(busy, ::launchSafe) }
-        }
+        history = withContext(Dispatchers.IO) { LocalStore.history(ctx) }
     }
 
     if (drawing) {
@@ -373,53 +411,6 @@ private fun HomeScreen() {
             },
             dismissButton = { TextButton(onClick = { toCancel = null }) { Text("No") } },
         )
-    }
-}
-
-@Composable
-private fun HistoryRow(item: HistoryItem, onReact: (String) -> Unit, onSeen: () -> Unit) {
-    val ctx = LocalContext.current
-    LaunchedEffect(item.id) { if (!item.seen) onSeen() }
-
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Box(
-            Modifier.size(88.dp).clip(RoundedCornerShape(12.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (item.thumbPath != null) {
-                AsyncImage(model = File(item.thumbPath), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-            } else {
-                Text(typeLabel(item.type), style = MaterialTheme.typography.titleMedium)
-            }
-        }
-        Column(Modifier.weight(1f)) {
-            Text(item.senderName, fontWeight = FontWeight.Bold)
-            item.caption?.let { Text(it) }
-            Row {
-                REACTIONS.forEach { r ->
-                    TextButton(onClick = { onReact(r) }) {
-                        Text(if (item.reaction == r) "[$r]" else r)
-                    }
-                }
-            }
-            if (item.type != "ping" && item.localUri != null) {
-                TextButton(onClick = { openItem(ctx, item) }) { Text("Abrir") }
-            }
-        }
-    }
-}
-
-private fun openItem(ctx: Context, item: HistoryItem) {
-    val location = item.localUri ?: return
-    when (item.type) {
-        "video", "html", "drawing" -> ViewerActivity.open(ctx, item.type, location)
-        else -> {
-            val mime = if (item.type == "gif") "image/gif" else "image/*"
-            val intent = Intent(Intent.ACTION_VIEW)
-                .setDataAndType(Uri.parse(location), mime)
-                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            runCatching { ctx.startActivity(intent) }
-        }
     }
 }
 

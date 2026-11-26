@@ -34,12 +34,12 @@ export async function syncInbox(userId: string): Promise<void> {
 }
 
 const BODY: Record<string, string> = {
-  ping: "Está pensando en ti 💭",
-  photo: "📷 Foto nueva",
-  video: "🎬 Vídeo nuevo",
-  gif: "✨ GIF nuevo",
-  html: "🌸 Animación nueva",
-  drawing: "🎨 Dibujo nuevo",
+  ping: "Está pensando en ti",
+  photo: "Foto nueva",
+  video: "Vídeo nuevo",
+  gif: "GIF nuevo",
+  html: "Animación nueva",
+  drawing: "Dibujo nuevo",
 };
 
 async function processOne(userId: string, m: PendingMessage) {
@@ -95,7 +95,7 @@ export function subscribeInbox(userId: string, onChange: () => void): () => void
       const old = payload.old as { reaction?: string | null; seen_at?: string | null };
       if (now.recipient_id === userId) return;
       if (now.reaction && now.reaction !== old.reaction) notify("4u", `Han reaccionado ${now.reaction}`);
-      else if (now.seen_at && !old.seen_at) notify("4u", "Han visto tu mensaje 👀");
+      else if (now.seen_at && !old.seen_at) notify("4u", "Han visto tu mensaje");
     })
     .subscribe();
 

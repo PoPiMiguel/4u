@@ -23,7 +23,7 @@ export default function Login() {
 
   return (
     <form className="card login" onSubmit={submit}>
-      <h1>4u 💌</h1>
+      <h1 className="wordmark">4u</h1>
       {mode === "signup" && (
         <input placeholder="Tu nombre" value={name} onChange={(e) => setName(e.target.value)} required maxLength={40} />
       )}
@@ -36,7 +36,7 @@ export default function Login() {
         required
         minLength={6}
       />
-      <button disabled={busy}>{mode === "login" ? "Entrar" : "Crear cuenta"}</button>
+      <button className="primary" disabled={busy}>{mode === "login" ? "Entrar" : "Crear cuenta"}</button>
       <button type="button" className="link" onClick={() => setMode(mode === "login" ? "signup" : "login")}>
         {mode === "login" ? "¿No tienes cuenta? Regístrate" : "Ya tengo cuenta"}
       </button>

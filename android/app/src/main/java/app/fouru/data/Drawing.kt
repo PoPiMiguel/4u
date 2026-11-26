@@ -26,7 +26,12 @@ data class Drawing(
         const val ASPECT = 1.5
         const val MAX_GAP_MS = 350L
         const val MAX_PLAY_MS = 6000L
-        private val json = Json { ignoreUnknownKeys = true }
+        // encodeDefaults: sin él, Kotlin omite bg/w/h cuando valen lo de por
+        // defecto y el escritorio no sabe qué fondo pintar.
+        private val json = Json {
+            ignoreUnknownKeys = true
+            encodeDefaults = true
+        }
 
         fun parse(text: String): Drawing = json.decodeFromString(text)
     }
