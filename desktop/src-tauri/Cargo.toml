@@ -1,6 +1,6 @@
 [package]
 name = "fouru"
-version = "0.3.0"
+version = "0.4.0"
 description = "4u — widget para compartir momentos"
 edition = "2021"
 
