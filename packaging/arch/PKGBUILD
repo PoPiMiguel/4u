@@ -4,7 +4,7 @@
 # Para actualizar: cambia pkgver, updpkgsums y makepkg -si otra vez
 # (en Linux el actualizador integrado solo funciona con la AppImage).
 pkgname=4u-bin
-pkgver=0.3.0
+pkgver=0.4.0
 pkgrel=1
 pkgdesc="4u: fotos, vídeos, dibujos y animaciones que salen en un widget de la otra persona"
 arch=('x86_64')
@@ -15,7 +15,7 @@ provides=('4u')
 conflicts=('4u')
 options=('!strip' '!debug')
 source=("4u_${pkgver}_amd64.deb::${url}/releases/download/v${pkgver}/4u_${pkgver}_amd64.deb")
-sha256sums=('e73432ec8de3b17fdce630389637401eed60e19924a24338b03d7b7efce8e063')
+sha256sums=('fac6c84d1f956485456da7286c5386fe9eb8a51c449799d5cb11ee0ac2aa7cae')
 
 package() {
   bsdtar -xf data.tar.gz -C "$pkgdir"
