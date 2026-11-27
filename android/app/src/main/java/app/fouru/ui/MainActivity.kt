@@ -62,6 +62,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -180,11 +182,14 @@ private fun HomeScreen() {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var contacts by remember { mutableStateOf<List<ContactRow>>(emptyList()) }
-    var selected by remember { mutableStateOf(setOf<String>()) }
+    // Guardado aunque Android recree la pantalla (p. ej. mientras la cámara está abierta).
+    var selected by rememberSaveable(stateSaver = listSaver<Set<String>, String>({ it.toList() }, { it.toSet() })) {
+        mutableStateOf(setOf<String>())
+    }
     var history by remember { mutableStateOf(LocalStore.history(ctx)) }
     var busy by remember { mutableStateOf(false) }
-    var caption by remember { mutableStateOf("") }
-    var deliverAt by remember { mutableStateOf<Instant?>(null) }
+    var caption by rememberSaveable { mutableStateOf("") }
+    var deliverAt by rememberSaveable { mutableStateOf<Instant?>(null) }
     var outPending by remember { mutableStateOf<List<OutPending>>(emptyList()) }
     var sent by remember { mutableStateOf<List<SentItem>>(emptyList()) }
     var toCancel by remember { mutableStateOf<OutPending?>(null) }
@@ -242,10 +247,18 @@ private fun HomeScreen() {
         if (uri != null) sendPrepared("Preparando…") { prepareMedia(ctx, uri) }
     }
     // "Hacer foto": la app de cámara guarda en un archivo nuestro (FileProvider).
-    var cameraUri by remember { mutableStateOf<Uri?>(null) }
+    // Con la cámara abierta, Android puede cerrar y recrear esta pantalla (giro,
+    // falta de memoria): la ruta se guarda con rememberSaveable y, si aun así se
+    // pierde, se usa la última foto de cache/camera.
+    var cameraUri by rememberSaveable { mutableStateOf<Uri?>(null) }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
-        val uri = cameraUri
-        if (ok && uri != null) sendPrepared("Preparando…") { prepareMedia(ctx, uri) }
+        val uri = cameraUri ?: lastCameraUri(ctx)
+        cameraUri = null
+        if (uri == null) {
+            if (ok) Toast.makeText(ctx, "No se encontró la foto", Toast.LENGTH_LONG).show()
+        } else if (ok || cameraFileHasData(ctx, uri)) {
+            sendPrepared("Preparando…") { prepareMedia(ctx, uri) }
+        }
     }
     var pinned by remember { mutableStateOf(LocalStore.pinnedId(ctx)) }
 
@@ -500,6 +513,17 @@ private suspend fun prepareMedia(ctx: Context, uri: Uri): Prepared {
         }
     }
 }
+
+/** Última foto hecha con la cámara, por si se perdió la ruta al recrear la pantalla. */
+private fun lastCameraUri(ctx: Context): Uri? =
+    File(ctx.cacheDir, "camera").listFiles()
+        ?.filter { it.length() > 0 }
+        ?.maxByOrNull { it.lastModified() }
+        ?.let { FileProvider.getUriForFile(ctx, "${ctx.packageName}.files", it) }
+
+/** Algunas apps de cámara devuelven "cancelado" aunque hayan guardado la foto. */
+private fun cameraFileHasData(ctx: Context, uri: Uri): Boolean =
+    runCatching { ctx.contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize > 0 } }.getOrNull() == true
 
 /** Archivo temporal para la cámara (cache/camera, compartido por FileProvider). */
 private fun newCameraUri(ctx: Context): Uri {
